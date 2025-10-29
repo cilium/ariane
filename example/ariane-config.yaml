@@ -1,0 +1,15 @@
+allowed-teams:
+  - organization-members
+
+triggers:
+  /test:
+    workflows:
+      - foo.yaml
+      - bar.yaml
+  /test-something-else:
+    workflows:
+      - baz.yaml
+
+workflows:
+  foo.yaml:
+    paths-ignore-regex: (bar|baz)/

@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  workflow_dispatch: {}
+
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # Required to generate OIDC tokens for GCP authentication
+  id-token: write
+
+
+jobs:
+  build-and-deploy:
+    concurrency:
+      group: ${{ github.workflow }}
+    name: Build and deploy to GCP
+    environment: production
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Generate server configuration
+        run: |
+          TAG=$(date +%Y%m%d%H%M)-$(git log -1 --pretty=%h)
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+
+          GH_APP_PRIVATE_KEY_ESCAPED=$(echo "${{ secrets.GH_APP_PRIVATE_KEY }}" | sed ':a;N;$!ba;s/\n/\\n/g')
+          echo "::add-mask::${GH_APP_PRIVATE_KEY_ESCAPED}"
+
+          cat <<EOF | tee -a app.yaml
+          service: default
+          env_variables:
+            ARIANE_VERSION: ${TAG}
+            ARIANE_SERVER_PORT: 8080
+            ARIANE_SERVER_ADDRESS: "0.0.0.0"
+            ARIANE_RUN_DELAY: 30s
+            GITHUB_V3_API_URL: ${{ vars.GH_V3_API_URL }}
+            GITHUB_APP_INTEGRATION_ID: ${{ secrets.GH_APP_INTEGRATION_ID }}
+            GITHUB_APP_WEBHOOK_SECRET: ${{ secrets.GH_APP_WEBHOOK_SECRET }}
+            GITHUB_APP_PRIVATE_KEY: ${GH_APP_PRIVATE_KEY_ESCAPED}
+          EOF
+
+      - name: Log in to GCP
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Docker
+        uses: docker/setup-docker-action@3fb92d6d9c634363128c8cce4bc3b2826526370a # v4.4.0
+
+      - name: Docker Login
+        run: gcloud auth configure-docker
+
+      - name: Build Docker image
+        id: build-image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: ${{ github.workspace }}
+          file: Dockerfile
+          push: true
+          tags: |
+            gcr.io/${{ vars.GCP_PROJECT_ID }}/ariane:${{ env.TAG }}
+
+      - name: Deploy to GCP App Engine
+        run: |
+          gcloud app deploy --quiet \
+            --image-url=gcr.io/${{ vars.GCP_PROJECT_ID }}/ariane:${{ env.TAG }} \
+            ./app.yaml
+
+      - name: Delete old versions
+        run: |
+          gcloud app versions list --service default --format "value(version.id)" --sort-by "~version.createTime" \
+            | tail -n +10 \
+            | xargs -r gcloud app versions delete --service default --quiet
