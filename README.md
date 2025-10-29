@@ -60,5 +60,5 @@ Github workflow builds a docker image and pushes it to Google Artifact Registry 
 
 ## Production
 
-One instances of the GitHub App is deployed on GCP via App Engine, in order to supervise the main repositories `cilium/cilium`.
-To update the instances, run the release workflow in GitHub Actions.
+One instance of the GitHub App is deployed on GCP via App Engine, in order to supervise the main repository `cilium/cilium`.
+To update the instance, run the release workflow in GitHub Actions.
