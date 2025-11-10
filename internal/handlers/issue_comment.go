@@ -85,7 +85,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		return err
 	}
 
-	contextRef, SHA := h.determineContextRef(pr, repositoryOwner, repositoryName, logger)
+	contextRef, headSHA, baseSHA := h.determineContextRef(pr, repositoryOwner, repositoryName, logger)
 
 	// retrieve Ariane configuration (triggers, etc.) from repository based on chosen context
 	arianeConfig, err := configGetArianeConfigFromRepository(client, ctx, repositoryOwner, repositoryName, contextRef)
@@ -110,7 +110,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		return nil
 	}
 	logger.Debug().Msgf("Found trigger phrase: %q", submatch)
-	workflowDispatchEvent := h.createWorkflowDispatchEvent(prNumber, contextRef, SHA, submatch)
+	workflowDispatchEvent := h.createWorkflowDispatchEvent(prNumber, contextRef, headSHA, baseSHA, submatch)
 
 	files, err := h.getPRFiles(ctx, client, repositoryOwner, repositoryName, prNumber, logger)
 	if err != nil {
@@ -118,7 +118,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	}
 
 	for _, workflow := range workflowsToTrigger {
-		if h.shouldSkipWorkflow(ctx, client, repositoryOwner, repositoryName, workflow, SHA, logger) {
+		if h.shouldSkipWorkflow(ctx, client, repositoryOwner, repositoryName, workflow, headSHA, logger) {
 			continue
 		}
 
@@ -127,7 +127,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 				return err
 			}
 		} else {
-			if err := h.markWorkflowAsSkipped(ctx, client, repositoryOwner, repositoryName, workflow, SHA, logger); err != nil {
+			if err := h.markWorkflowAsSkipped(ctx, client, repositoryOwner, repositoryName, workflow, headSHA, logger); err != nil {
 				return err
 			}
 		}
@@ -171,21 +171,21 @@ func (h *PRCommentHandler) getPullRequest(ctx context.Context, client *github.Cl
 	return nil, err
 }
 
-func (h *PRCommentHandler) determineContextRef(pr *github.PullRequest, owner, repo string, logger zerolog.Logger) (string, string) {
-	SHA := pr.GetHead().GetSHA()
+func (h *PRCommentHandler) determineContextRef(pr *github.PullRequest, owner, repo string, logger zerolog.Logger) (contextRef, headSHA, baseSHA string) {
+	headSHA = pr.GetHead().GetSHA()
+	baseSHA = pr.GetBase().GetSHA()
 	prOwner := pr.GetHead().GetRepo().GetOwner().GetLogin()
 	prRepo := pr.GetHead().GetRepo().GetName()
 
-	var contextRef string
 	// PR comes from a fork
 	if prOwner != owner || prRepo != repo {
 		contextRef = pr.GetBase().GetRef()
-		logger.Debug().Msgf("PR is from a fork, workflows for %s will run in the context of the PR target branch %s", SHA, contextRef)
+		logger.Debug().Msgf("PR is from a fork, workflows for %s will run in the context of the PR target branch %s", headSHA, contextRef)
 	} else {
 		contextRef = pr.GetHead().GetRef()
-		logger.Debug().Msgf("PR is not from a fork, workflows for %s will run in the context of the PR branch %s", SHA, contextRef)
+		logger.Debug().Msgf("PR is not from a fork, workflows for %s will run in the context of the PR branch %s", headSHA, contextRef)
 	}
-	return contextRef, SHA
+	return contextRef, headSHA, baseSHA
 }
 
 // isAllowedTeamMember uses the "Get team membership for a user" to infer if a user can run Ariane
@@ -212,14 +212,15 @@ func (h *PRCommentHandler) isAllowedTeamMember(ctx context.Context, client *gith
 }
 
 // Creates a reference for a workflow, in order to run it via workflow_dispatch
-func (h *PRCommentHandler) createWorkflowDispatchEvent(prNumber int, contextRef, SHA string, submatch []string) github.CreateWorkflowDispatchEventRequest {
+func (h *PRCommentHandler) createWorkflowDispatchEvent(prNumber int, contextRef, headSHA, baseSHA string, submatch []string) github.CreateWorkflowDispatchEventRequest {
 	workflowDispatchEvent := github.CreateWorkflowDispatchEventRequest{
 		Ref: contextRef,
 		// These are parameters (inputs) on workflow_dispatch
 		Inputs: map[string]interface{}{
 			"PR-number":   strconv.Itoa(prNumber),
 			"context-ref": contextRef,
-			"SHA":         SHA,
+			"SHA":         headSHA,
+			"base-SHA":    baseSHA,
 		},
 	}
 
