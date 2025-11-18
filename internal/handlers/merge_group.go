@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/go-github/v75/github"
 	"github.com/cilium/ariane/internal/log"
+	"github.com/google/go-github/v79/github"
 	"github.com/palantir/go-githubapp/githubapp"
 )
 

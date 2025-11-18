@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/google/go-github/v75/github"
+	"github.com/google/go-github/v79/github"
 	"gopkg.in/yaml.v3"
 
 	"github.com/cilium/ariane/internal/log"
@@ -171,4 +171,3 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 	// Otherwise, do run it
 	return numberIgnoredFiles < len(files)
 }
-
