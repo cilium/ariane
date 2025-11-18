@@ -2,6 +2,8 @@ name: Release
 
 on:
   workflow_dispatch: {}
+  schedule:
+    - cron: "30 1 1,15 * *"
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
@@ -10,7 +12,6 @@ permissions:
   contents: read
   # Required to generate OIDC tokens for GCP authentication
   id-token: write
-
 
 jobs:
   build-and-deploy:
