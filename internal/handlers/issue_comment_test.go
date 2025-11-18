@@ -19,8 +19,8 @@ import (
 
 	reflect "reflect"
 
-	github "github.com/google/go-github/v75/github"
 	"github.com/cilium/ariane/internal/config"
+	github "github.com/google/go-github/v79/github"
 	"github.com/rs/zerolog"
 	githubv4 "github.com/shurcooL/githubv4"
 	gomock "go.uber.org/mock/gomock"
