@@ -24,9 +24,6 @@
   separateMultipleMajor: true,
   separateMinorPatch: true,
   pruneStaleBranches: true,
-  baseBranchPatterns: [
-    'main',
-  ],
   vulnerabilityAlerts: {
     enabled: true,
   },
