@@ -12,6 +12,7 @@
     'go.sum',
     'Dockerfile',
   ],
+ 
   postUpdateOptions: [
     'gomodTidy',
   ],
@@ -33,6 +34,9 @@
     'renovate/stop-updating',
   ],
   stopUpdatingLabel: 'renovate/stop-updating',
+  baseBranches: [
+    'main',
+  ],
   packageRules: [
     {
       groupName: 'all github action dependencies',
