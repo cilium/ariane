@@ -20,9 +20,15 @@ const (
 )
 
 type ArianeConfig struct {
+	Feedback     FeedbackConfig                      `yaml:"feedback,omitempty"`
 	Triggers     map[string]TriggerConfig            `yaml:"triggers"`
 	Workflows    map[string]WorkflowPathsRegexConfig `yaml:"workflows"`
 	AllowedTeams []string                            `yaml:"allowed-teams,omitempty"`
+}
+
+type FeedbackConfig struct {
+	Enabled             *bool `yaml:"enabled,omitempty"`
+	IncludeAllWorkflows *bool `yaml:"include-all-workflows,omitempty"`
 }
 
 type TriggerConfig struct {
@@ -67,6 +73,20 @@ func (config *ArianeConfig) CheckForTrigger(ctx context.Context, comment string)
 		}
 	}
 	return nil, nil
+}
+
+func (c *ArianeConfig) GetFeedback() bool {
+	if c.Feedback.Enabled == nil {
+		return false
+	}
+	return *c.Feedback.Enabled
+}
+
+func (c *ArianeConfig) GetIncludeAllWorkflows() bool {
+	if c.Feedback.IncludeAllWorkflows == nil {
+		return false
+	}
+	return *c.Feedback.IncludeAllWorkflows
 }
 
 // ShouldRunOnlyWorkflows checks given changed files against .github/workflow pattern

@@ -28,6 +28,11 @@ type PRCommentHandler struct {
 	RunDelay time.Duration
 }
 
+type workflowStatus struct {
+	name   string
+	status string // "skipped", "triggered", "failed"
+}
+
 func (h *PRCommentHandler) Handles() []string {
 	return []string{"issue_comment"}
 }
@@ -69,10 +74,17 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 
 	var botUser bool
 
+	// skip all comments that do not start with /
+	if !strings.HasPrefix(commentBody, "/") {
+		return nil
+	}
+
 	// only handle non-bot comments
 	if strings.HasSuffix(commentAuthor, "[bot]") {
 		if !strings.HasPrefix(commentAuthor, repositoryOwner) {
-			logger.Debug().Msgf("Issue comment was created by an unsupported bot: %s", commentAuthor)
+			comment := fmt.Sprintf("Issue comment was created by an unsupported bot: %s", commentAuthor)
+			logger.Debug().Msg(comment)
+			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 			return nil
 		}
 		// comment created by the cilium-* [bot]
@@ -82,6 +94,8 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	// Get PR metadata and validate PR author permissions
 	pr, err := h.getPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, logger)
 	if err != nil {
+		comment := fmt.Sprintf("Failed to retrieve pull request: %v", err)
+		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		return err
 	}
 
@@ -90,7 +104,9 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	// retrieve Ariane configuration (triggers, etc.) from repository based on chosen context
 	arianeConfig, err := configGetArianeConfigFromRepository(client, ctx, repositoryOwner, repositoryName, contextRef)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to retrieve config file")
+		comment := "Failed to retrieve config file"
+		logger.Error().Err(err).Msg(comment)
+		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		return err
 	}
 
@@ -100,6 +116,10 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		// Initially considered updating the comment with a "no entry" emoji, but given the limited
 		// selection of emojis that can be used, none appeared to be entirely fitting.
 		// Maybe alternative feedback mechanisms should be explored to communicate the rejection status clearly.
+		if arianeConfig.GetFeedback() {
+			comment := fmt.Sprintf("Comment by %s not allowed", commentAuthor)
+			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+		}
 		return nil
 	}
 
@@ -107,30 +127,81 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	submatch, workflowsToTrigger := arianeConfig.CheckForTrigger(ctx, commentBody)
 	// the command on commentBody (e.g. /test-this) does not match any "triggers"
 	if submatch == nil {
+		if arianeConfig.GetFeedback() {
+			comment := fmt.Sprintf("Command %s not found", commentBody)
+			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+		}
 		return nil
 	}
+
 	logger.Debug().Msgf("Found trigger phrase: %q", submatch)
 	workflowDispatchEvent := h.createWorkflowDispatchEvent(prNumber, contextRef, headSHA, baseSHA, submatch)
 
 	files, err := h.getPRFiles(ctx, client, repositoryOwner, repositoryName, prNumber, logger)
 	if err != nil {
+		comment := fmt.Sprintf("Failed to retrieve pull request files: %v", err)
+		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		return err
 	}
 
+	var workflowStatuses []workflowStatus
+
 	for _, workflow := range workflowsToTrigger {
 		if h.shouldSkipWorkflow(ctx, client, repositoryOwner, repositoryName, workflow, headSHA, logger) {
+			if arianeConfig.GetIncludeAllWorkflows() {
+				workflowStatuses = append(workflowStatuses, workflowStatus{name: workflow, status: "already completed"})
+			}
 			continue
 		}
 
 		if h.shouldRunWorkflow(ctx, arianeConfig, workflow, files) {
 			if err := h.triggerWorkflow(ctx, client, repositoryOwner, repositoryName, workflow, workflowDispatchEvent, logger); err != nil {
-				return err
+				workflowStatuses = append(workflowStatuses, workflowStatus{name: workflow, status: "failed"})
+				logger.Error().Err(err).Msgf("Failed to trigger workflow %s", workflow)
+			} else {
+				if arianeConfig.GetIncludeAllWorkflows() {
+					workflowStatuses = append(workflowStatuses, workflowStatus{name: workflow, status: "triggered"})
+				}
 			}
 		} else {
 			if err := h.markWorkflowAsSkipped(ctx, client, repositoryOwner, repositoryName, workflow, headSHA, logger); err != nil {
-				return err
+				workflowStatuses = append(workflowStatuses, workflowStatus{name: workflow, status: "failed to mark as skipped"})
+				logger.Error().Err(err).Msgf("Failed to mark workflow %s as skipped", workflow)
+			} else {
+				if arianeConfig.GetIncludeAllWorkflows() {
+					workflowStatuses = append(workflowStatuses, workflowStatus{name: workflow, status: "skipped"})
+				}
 			}
 		}
+	}
+
+	// Build summary comment with workflow status table
+	if arianeConfig.GetFeedback() && len(workflowStatuses) > 0 {
+		var commentBuilder strings.Builder
+		commentBuilder.WriteString("## Workflow Status\n\n")
+		commentBuilder.WriteString("| Workflow | Status |\n")
+		commentBuilder.WriteString("|----------|--------|\n")
+
+		for _, ws := range workflowStatuses {
+			var statusEmoji string
+			switch ws.status {
+			case "triggered":
+				statusEmoji = "✅ Triggered"
+			case "skipped":
+				statusEmoji = "⏭️ Skipped"
+			case "already completed":
+				statusEmoji = "✔️ Already Completed"
+			case "failed":
+				statusEmoji = "❌ Failed to Trigger"
+			case "failed to mark as skipped":
+				statusEmoji = "⚠️ Failed to Mark as Skipped"
+			default:
+				statusEmoji = ws.status
+			}
+			commentBuilder.WriteString(fmt.Sprintf("| `%s` | %s |\n", ws.name, statusEmoji))
+		}
+
+		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, commentBuilder.String(), logger)
 	}
 
 	if err := h.reactToComment(ctx, client, repositoryOwner, repositoryName, commentID, logger); err != nil {
@@ -140,35 +211,47 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	return nil
 }
 
+func (h *PRCommentHandler) commentOnPullRequest(ctx context.Context, client *github.Client, owner, repo string, prNumber int, replyBody string, logger zerolog.Logger) error {
+	comment := &github.IssueComment{
+		Body: github.String(replyBody),
+	}
+	_, _, err := client.Issues.CreateComment(ctx, owner, repo, prNumber, comment)
+	if err != nil {
+		logger.Error().Err(err).Msgf("Failed to create comment")
+		return err
+	}
+	return nil
+}
+
 // getPullRequest returns a PR object to retrieve a pull request metadata
 func (h *PRCommentHandler) getPullRequest(ctx context.Context, client *github.Client, owner, repo string, prNumber int, logger zerolog.Logger) (*github.PullRequest, error) {
-	opt := &github.PullRequestListOptions{
-		State: "open",
-		ListOptions: github.ListOptions{
-			PerPage: 100,
-		},
-	}
-	for {
-		prs, res, err := client.PullRequests.List(ctx, owner, repo, opt)
-		if err != nil {
-			logger.Error().Err(err).Msgf("Failed to retrieve pull request")
-			return nil, err
-		}
+	var pr *github.PullRequest
+	var err error
 
-		for i := range prs {
-			if prs[i].Number != nil && *prs[i].Number == prNumber {
-				return prs[i], nil
-			}
-		}
-
-		if res.NextPage == 0 {
+	for attempt := 1; attempt <= 5; attempt++ {
+		pr, _, err = client.PullRequests.Get(ctx, owner, repo, prNumber)
+		if err == nil {
 			break
 		}
-		opt.ListOptions.Page = res.NextPage
+
+		if attempt < 5 {
+			logger.Warn().Err(err).Msgf("Failed to retrieve pull request on attempt %d, retrying in 5 seconds", attempt)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		logger.Error().Err(err).Msgf("Failed to retrieve pull request after %d attempts", attempt)
+		return nil, err
 	}
-	err := errors.New("pull request not found")
-	logger.Error().Msgf("%s", err.Error())
-	return nil, err
+
+	// return pr number if is open
+	if pr.GetState() != "open" {
+		err = errors.New("pull request is not open")
+		logger.Error().Err(err).Msgf("Pull request is not open")
+		return nil, err
+	}
+
+	return pr, nil
 }
 
 func (h *PRCommentHandler) determineContextRef(pr *github.PullRequest, owner, repo string, logger zerolog.Logger) (contextRef, headSHA, baseSHA string) {
