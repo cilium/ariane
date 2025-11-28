@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-github/v79/github"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 
 	"github.com/cilium/ariane/internal/config"
 	"github.com/cilium/ariane/internal/log"
@@ -278,5 +279,234 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 		if result != testCase.ExpectedResult {
 			t.Errorf("[TEST%v] ShouldRunWorkflow failed.\nfiles: %v;\nExpected reason to pass the test: %v", idx+1, files, testCase.ExpectedReason)
 		}
+	}
+}
+
+func TestGetVerbose(t *testing.T) {
+	testCases := []struct {
+		name           string
+		config         *config.ArianeConfig
+		expectedResult bool
+	}{
+		{
+			name: "Feedback.Verbose is nil (default zero value)",
+			config: &config.ArianeConfig{
+				Feedback: config.FeedbackConfig{
+					Verbose: nil,
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Verbose is true",
+			config: &config.ArianeConfig{
+				Feedback: config.FeedbackConfig{
+					Verbose: boolPtr(true),
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Verbose is false",
+			config: &config.ArianeConfig{
+				Feedback: config.FeedbackConfig{
+					Verbose: boolPtr(false),
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name:           "Empty config with zero value Feedback",
+			config:         &config.ArianeConfig{},
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.config.GetVerbose()
+			assert.Equal(t, tc.expectedResult, result)
+		})
+	}
+}
+
+func TestGetWorkflowsReport(t *testing.T) {
+	testCases := []struct {
+		name           string
+		config         *config.ArianeConfig
+		expectedResult bool
+	}{
+		{
+			name: "Feedback.WorkflowsReport is nil (default zero value)",
+			config: &config.ArianeConfig{
+				Feedback: config.FeedbackConfig{
+					WorkflowsReport: nil,
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "WorkflowsReport is true",
+			config: &config.ArianeConfig{
+				Feedback: config.FeedbackConfig{
+					WorkflowsReport: boolPtr(true),
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "WorkflowsReport is false",
+			config: &config.ArianeConfig{
+				Feedback: config.FeedbackConfig{
+					WorkflowsReport: boolPtr(false),
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name:           "Empty config with zero value Feedback",
+			config:         &config.ArianeConfig{},
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.config.GetWorkflowsReport()
+			assert.Equal(t, tc.expectedResult, result)
+		})
+	}
+}
+
+// boolPtr is a helper function to create a pointer to a bool
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func TestGetVerbose_WithYAMLParsing(t *testing.T) {
+	testCases := []struct {
+		name           string
+		yamlConfig     string
+		expectedResult bool
+	}{
+		{
+			name: "Feedback omitted from YAML config",
+			yamlConfig: `
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+allowed-teams:
+  - team1
+`,
+			expectedResult: false,
+		},
+		{
+			name: "Feedback present but verbose omitted",
+			yamlConfig: `
+feedback:
+  workflows-report: true
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+`,
+			expectedResult: false,
+		},
+		{
+			name: "Verbose explicitly set to true",
+			yamlConfig: `
+feedback:
+  verbose: true
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+`,
+			expectedResult: true,
+		},
+		{
+			name: "Verbose explicitly set to false",
+			yamlConfig: `
+feedback:
+  verbose: false
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+`,
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var cfg config.ArianeConfig
+			err := yaml.Unmarshal([]byte(tc.yamlConfig), &cfg)
+			assert.NoError(t, err)
+
+			result := cfg.GetVerbose()
+			assert.Equal(t, tc.expectedResult, result)
+		})
+	}
+}
+
+func TestGetWorkflowsReport_WithYAMLParsing(t *testing.T) {
+	testCases := []struct {
+		name           string
+		yamlConfig     string
+		expectedResult bool
+	}{
+		{
+			name: "Feedback omitted from YAML config",
+			yamlConfig: `
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+allowed-teams:
+  - team1
+`,
+			expectedResult: false,
+		},
+		{
+			name: "Feedback present but workflows-report omitted",
+			yamlConfig: `
+feedback:
+  verbose: true
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+`,
+			expectedResult: false,
+		},
+		{
+			name: "WorkflowsReport explicitly set to true",
+			yamlConfig: `
+feedback:
+  workflows-report: true
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+`,
+			expectedResult: true,
+		},
+		{
+			name: "WorkflowsReport explicitly set to false",
+			yamlConfig: `
+feedback:
+  workflows-report: false
+triggers:
+  /test:
+    workflows: ["test.yaml"]
+`,
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var cfg config.ArianeConfig
+			err := yaml.Unmarshal([]byte(tc.yamlConfig), &cfg)
+			assert.NoError(t, err)
+
+			result := cfg.GetWorkflowsReport()
+			assert.Equal(t, tc.expectedResult, result)
+		})
 	}
 }

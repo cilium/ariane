@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	DefaultRunDelay      = 30 * time.Second
-	DefaultServerAddress = "127.0.0.1"
-	DefaultServerPort    = 8080
-	DefaultVersion       = "0.0.1-dirty"
-	ServerConfigPath     = "server-config.yaml"
+	DefaultRunDelay         = 30 * time.Second
+	DefaultServerAddress    = "127.0.0.1"
+	DefaultServerPort       = 8080
+	DefaultVersion          = "0.0.1-dirty"
+	DefaultMaxRetryAttempts = 5
+	ServerConfigPath        = "server-config.yaml"
 )
 
 type ServerConfig struct {
