@@ -379,15 +379,15 @@ func setMockServer() *httptest.Server {
 			{
 				Number: &number,
 				Head: &github.PullRequestBranch{
-					Ref: github.String("pr/owner/mybugfix"),
-					SHA: github.String("mock-sha"),
+					Ref: github.Ptr("pr/owner/mybugfix"),
+					SHA: github.Ptr("mock-sha"),
 					Repo: &github.Repository{
-						Owner: &github.User{Login: github.String("owner")},
-						Name:  github.String("repo"),
+						Owner: &github.User{Login: github.Ptr("owner")},
+						Name:  github.Ptr("repo"),
 					},
 				},
 				Base: &github.PullRequestBranch{
-					Ref: github.String("main"),
+					Ref: github.Ptr("main"),
 				},
 			},
 		}
@@ -398,15 +398,15 @@ func setMockServer() *httptest.Server {
 	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
 		pr := &github.PullRequest{
 			Head: &github.PullRequestBranch{
-				Ref: github.String("pr/owner/mybugfix"),
-				SHA: github.String("mock-sha"),
+				Ref: github.Ptr("pr/owner/mybugfix"),
+				SHA: github.Ptr("mock-sha"),
 				Repo: &github.Repository{
-					Owner: &github.User{Login: github.String("owner")},
-					Name:  github.String("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+					Name:  github.Ptr("repo"),
 				},
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.String("main"),
+				Ref: github.Ptr("main"),
 			},
 		}
 		if err := json.NewEncoder(w).Encode(pr); err != nil {
@@ -417,7 +417,7 @@ func setMockServer() *httptest.Server {
 		// https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests-files
 		files := []*github.CommitFile{
 			{
-				Filename: github.String(".github/workflows/foo.yaml"),
+				Filename: github.Ptr(".github/workflows/foo.yaml"),
 			},
 		}
 		if err := json.NewEncoder(w).Encode(files); err != nil {
@@ -431,11 +431,11 @@ func setMockServer() *httptest.Server {
 		switch author {
 		case "trustedauthor":
 			membership = &github.Membership{
-				State: github.String("active"),
+				State: github.Ptr("active"),
 			}
 		case "unknownauthor":
 			membership = &github.Membership{
-				State: github.String("pending"),
+				State: github.Ptr("pending"),
 			}
 		}
 
@@ -446,7 +446,7 @@ func setMockServer() *httptest.Server {
 	mux.HandleFunc("POST /repos/owner/repo/actions/workflows/foo.yaml/dispatches", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#create-a-workflow-dispatch-event
 		w.WriteHeader(http.StatusNoContent)
-		if _, err := w.Write([]byte(fmt.Sprintf("Status: %v\n", http.StatusNoContent))); err != nil {
+		if _, err := fmt.Fprintf(w, "Status: %v\n", http.StatusNoContent); err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 	})
@@ -459,47 +459,47 @@ func setMockServer() *httptest.Server {
 		// search specific workflows, filtering by HeadSHA of the PR
 		if SHA != "mock-sha" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount:   github.Int(0),
+				TotalCount:   github.Ptr(0),
 				WorkflowRuns: []*github.WorkflowRun{},
 			}
 		} else if workflow == "foo.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Int(2),
+				TotalCount: github.Ptr(2),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:      github.Int64(1),
-						Status:  github.String("cancelled"),
-						HeadSHA: github.String(SHA),
+						ID:      github.Ptr(int64(1)),
+						Status:  github.Ptr("cancelled"),
+						HeadSHA: github.Ptr(SHA),
 					},
 				},
 			}
 		} else if workflow == "bar.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Int(1),
+				TotalCount: github.Ptr(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Int64(2),
-						Status:     github.String("completed"),
-						Conclusion: github.String("success"),
-						HeadSHA:    github.String(SHA),
+						ID:         github.Ptr(int64(2)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("success"),
+						HeadSHA:    github.Ptr(SHA),
 					},
 				},
 			}
 		} else if workflow == "foobar.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Int(1),
+				TotalCount: github.Ptr(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Int64(99),
-						Status:     github.String("completed"),
-						Conclusion: github.String("failure"),
-						HeadSHA:    github.String(SHA),
+						ID:         github.Ptr(int64(99)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("failure"),
+						HeadSHA:    github.Ptr(SHA),
 					},
 				},
 			}
 		} else {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount:   github.Int(0),
+				TotalCount:   github.Ptr(0),
 				WorkflowRuns: []*github.WorkflowRun{},
 			}
 		}
@@ -515,12 +515,12 @@ func setMockServer() *httptest.Server {
 		}
 		// runID 99 is the failed workflow listed above
 		jobs := &github.Jobs{
-			TotalCount: github.Int(3),
+			TotalCount: github.Ptr(3),
 			Jobs: []*github.WorkflowJob{
 				{
-					ID:    github.Int64(1),
-					RunID: github.Int64(99),
-					Name:  github.String("Installation and Conformance"),
+					ID:    github.Ptr(int64(1)),
+					RunID: github.Ptr(int64(99)),
+					Name:  github.Ptr("Installation and Conformance"),
 				},
 			},
 		}
@@ -535,15 +535,15 @@ func setMockServer() *httptest.Server {
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
 		w.WriteHeader(http.StatusCreated)
-		if _, err := w.Write([]byte(fmt.Sprintf("Status: %v\n", http.StatusCreated))); err != nil {
+		if _, err := fmt.Fprintf(w, "Status: %v\n", http.StatusCreated); err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 	})
 	mux.HandleFunc("POST /repos/owner/repo/issues/comments/1/reactions", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/reactions/reactions?apiVersion=2022-11-28#create-reaction-for-an-issue-comment
 		reaction := &github.Reaction{
-			ID:      github.Int64(1),
-			Content: github.String(r.PostFormValue("content")),
+			ID:      github.Ptr(int64(1)),
+			Content: github.Ptr(r.PostFormValue("content")),
 		}
 		if err := json.NewEncoder(w).Encode(reaction); err != nil {
 			http.Error(w, "setMockServer: could not encode the reaction payload in JSON for the HTTP response.", http.StatusInternalServerError)

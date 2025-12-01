@@ -67,8 +67,8 @@ func (m *MergeGroupHandler) Handle(ctx context.Context, eventType, deliveryID st
 		checkRunOptions := github.CreateCheckRunOptions{
 			Name:       ch.Context,
 			HeadSHA:    headSHA,
-			Status:     github.String("completed"),
-			Conclusion: github.String("success"),
+			Status:     github.Ptr("completed"),
+			Conclusion: github.Ptr("success"),
 		}
 		if _, _, err := client.Checks.CreateCheckRun(ctx, repositoryOwner, repositoryName, checkRunOptions); err != nil {
 			logger.Error().Err(err).Msgf("Failed to set check run, %s", ch.Context)

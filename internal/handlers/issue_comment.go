@@ -164,7 +164,7 @@ func (h *PRCommentHandler) getPullRequest(ctx context.Context, client *github.Cl
 		if res.NextPage == 0 {
 			break
 		}
-		opt.ListOptions.Page = res.NextPage
+		opt.Page = res.NextPage
 	}
 	err := errors.New("pull request not found")
 	logger.Error().Msgf("%s", err.Error())
@@ -350,8 +350,8 @@ func (h *PRCommentHandler) markWorkflowAsSkipped(ctx context.Context, client *gi
 	checkRunOptions := github.CreateCheckRunOptions{
 		Name:       githubWorkflow.GetName(),
 		HeadSHA:    SHA,
-		Status:     github.String("completed"),
-		Conclusion: github.String("skipped"),
+		Status:     github.Ptr("completed"),
+		Conclusion: github.Ptr("skipped"),
 	}
 	if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repo, checkRunOptions); err != nil {
 		logger.Error().Err(err).Msg("Failed to set check run")
