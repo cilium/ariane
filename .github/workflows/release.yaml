@@ -37,6 +37,8 @@ jobs:
             ARIANE_VERSION: ${TAG}
             ARIANE_SERVER_PORT: 8080
             ARIANE_SERVER_ADDRESS: "0.0.0.0"
+            ARIANE_CLIENT_TIMEOUT: 10s
+            ARIANE_MAX_RETRY_ATTEMPTS: 3
             ARIANE_RUN_DELAY: 30s
             GITHUB_V3_API_URL: ${{ vars.GH_V3_API_URL }}
             GITHUB_APP_INTEGRATION_ID: ${{ secrets.GH_APP_INTEGRATION_ID }}

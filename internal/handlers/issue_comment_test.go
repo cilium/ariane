@@ -36,8 +36,9 @@ func TestHandle_NotaPR(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Times(0)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -71,8 +72,9 @@ func TestHandle_ActionNotCreated(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Times(0)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 	// Action can be created, edited, or delited
 	// The GHApp only reacts to "created"
@@ -112,8 +114,9 @@ func TestHandle_IsInvalidBot(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -156,8 +159,9 @@ func TestHandle_IsValidBot(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -200,8 +204,9 @@ func TestHandle(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -238,8 +243,9 @@ func Test_isAllowedTeamMember(t *testing.T) {
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	var logger zerolog.Logger
@@ -296,8 +302,9 @@ func Test_rerunFailedJobs(t *testing.T) {
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second * 30000,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second * 30000,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	logWriter := &LogWriter{}
@@ -332,8 +339,9 @@ func Test_shouldSkipWorkflow(t *testing.T) {
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	var logger zerolog.Logger
@@ -686,8 +694,9 @@ func TestHandle_WorkflowStatusTable(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -910,8 +919,9 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -965,8 +975,9 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -1019,8 +1030,9 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -1073,8 +1085,9 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{

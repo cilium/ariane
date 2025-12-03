@@ -29,10 +29,10 @@ type ArianeConfig struct {
 // FeedbackConfig contains configuration for feedback by ariane bot to the PR in the form of comments
 type FeedbackConfig struct {
 	// Whether to log verbose feedback
-	Verbose            *bool `yaml:"verbose,omitempty"`
+	Verbose *bool `yaml:"verbose,omitempty"`
 	// Whether to report on workflows triggered by ariane
-	WorkflowsReport    *bool `yaml:"workflows-report,omitempty"`
-    // Whether to report on all workflows (incl. successful and skipped ones
+	WorkflowsReport *bool `yaml:"workflows-report,omitempty"`
+	// Whether to report on all workflows (incl. successful and skipped ones
 	ReportAllWorkflows *bool `yaml:"report-all-workflows,omitempty"`
 }
 

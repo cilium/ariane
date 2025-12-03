@@ -26,7 +26,8 @@ var configGetArianeConfigFromRepository = config.GetArianeConfigFromRepository
 
 type PRCommentHandler struct {
 	githubapp.ClientCreator
-	RunDelay time.Duration
+	RunDelay         time.Duration
+	MaxRetryAttempts int
 }
 
 type workflowStatusType string
@@ -273,13 +274,13 @@ func (h *PRCommentHandler) getPullRequest(ctx context.Context, client *github.Cl
 	var pr *github.PullRequest
 	var err error
 
-	for attempt := 1; attempt <= config.DefaultMaxRetryAttempts; attempt++ {
+	for attempt := 1; attempt <= h.MaxRetryAttempts; attempt++ {
 		pr, _, err = client.PullRequests.Get(ctx, owner, repo, prNumber)
 		if err == nil {
 			break
 		}
 
-		if attempt < config.DefaultMaxRetryAttempts {
+		if attempt < h.MaxRetryAttempts {
 			backoffDuration := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
 			logger.Warn().Err(err).Msgf("Failed to retrieve pull request on attempt %d, retrying in %v", attempt, backoffDuration)
 			time.Sleep(backoffDuration)
