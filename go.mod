@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/google/go-github/v79 v79.0.0
-	github.com/google/go-github/v80 v80.0.0
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
 	github.com/palantir/go-githubapp v0.39.0
 	github.com/rs/zerolog v1.34.0
