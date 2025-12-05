@@ -97,6 +97,31 @@
         'pinDigest',
       ],
     },
+    {
+      // Disable direct updates to google/go-github
+      // Only allow updates when they come transitively from palantir/go-githubapp
+      matchPackageNames: [
+        'github.com/google/go-github/**',
+      ],
+      enabled: false,
+    },
+    {
+      // Disable Go minor version updates
+      // Only allow updates when palantir/go-githubapp upgrades the Go minor version
+      matchDatasources: [
+        'golang-version',
+        'docker',
+      ],
+      matchPackageNames: [
+        'go',
+        'golang',
+        'docker.io/library/golang',
+      ],
+      matchUpdateTypes: [
+        'minor',
+      ],
+      enabled: false,
+    },
   ],
   customManagers: [
     {
