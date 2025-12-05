@@ -402,7 +402,7 @@ func setMockServer() *httptest.Server {
 	})
 	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
 		pr := &github.PullRequest{
-			State: github.String("open"),
+			State: github.Ptr("open"),
 			Head: &github.PullRequestBranch{
 				Ref: github.Ptr("pr/owner/mybugfix"),
 				SHA: github.Ptr("mock-sha"),
@@ -565,8 +565,8 @@ func setMockServer() *httptest.Server {
 			return
 		}
 		comment := &github.IssueComment{
-			ID:   github.Int64(2),
-			Body: github.String(requestBody.Body),
+			ID:   github.Ptr(int64(2)),
+			Body: github.Ptr(requestBody.Body),
 		}
 		if err := json.NewEncoder(w).Encode(comment); err != nil {
 			http.Error(w, "setMockServer: could not encode the comment payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -575,9 +575,9 @@ func setMockServer() *httptest.Server {
 	mux.HandleFunc("/repos/owner/repo/actions/workflows/foo.yaml", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#get-a-workflow
 		workflow := &github.Workflow{
-			ID:   github.Int64(1),
-			Name: github.String("Foo Workflow"),
-			Path: github.String(".github/workflows/foo.yaml"),
+			ID:   github.Ptr(int64(1)),
+			Name: github.Ptr("Foo Workflow"),
+			Path: github.Ptr(".github/workflows/foo.yaml"),
 		}
 		if err := json.NewEncoder(w).Encode(workflow); err != nil {
 			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -585,9 +585,9 @@ func setMockServer() *httptest.Server {
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/workflows/bar.yaml", func(w http.ResponseWriter, r *http.Request) {
 		workflow := &github.Workflow{
-			ID:   github.Int64(2),
-			Name: github.String("Bar Workflow"),
-			Path: github.String(".github/workflows/bar.yaml"),
+			ID:   github.Ptr(int64(2)),
+			Name: github.Ptr("Bar Workflow"),
+			Path: github.Ptr(".github/workflows/bar.yaml"),
 		}
 		if err := json.NewEncoder(w).Encode(workflow); err != nil {
 			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -601,9 +601,9 @@ func setMockServer() *httptest.Server {
 			return
 		}
 		checkRun := &github.CheckRun{
-			ID:         github.Int64(1),
-			Name:       github.String(requestBody.Name),
-			HeadSHA:    github.String(requestBody.HeadSHA),
+			ID:         github.Ptr(int64(1)),
+			Name:       github.Ptr(requestBody.Name),
+			HeadSHA:    github.Ptr(requestBody.HeadSHA),
 			Status:     requestBody.Status,
 			Conclusion: requestBody.Conclusion,
 		}
@@ -939,7 +939,7 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 	}`)
 
 	var event github.IssueCommentEvent
-	json.Unmarshal(payload, &event)
+	_ = json.Unmarshal(payload, &event)
 
 	ctx := context.Background()
 
@@ -994,7 +994,7 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 	}`)
 
 	var event github.IssueCommentEvent
-	json.Unmarshal(payload, &event)
+	_ = json.Unmarshal(payload, &event)
 
 	ctx := context.Background()
 
@@ -1048,7 +1048,7 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 	}`)
 
 	var event github.IssueCommentEvent
-	json.Unmarshal(payload, &event)
+	_ = json.Unmarshal(payload, &event)
 
 	ctx := context.Background()
 
@@ -1102,7 +1102,7 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 	}`)
 
 	var event github.IssueCommentEvent
-	json.Unmarshal(payload, &event)
+	_ = json.Unmarshal(payload, &event)
 
 	ctx := context.Background()
 
@@ -1116,31 +1116,31 @@ func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool) *httpte
 	// Mock individual PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
 		pr := github.PullRequest{
-			Number: github.Int(0),
+			Number: github.Ptr(0),
 			Head: &github.PullRequestBranch{
-				SHA: github.String("abc123"),
-				Ref: github.String("feature-branch"),
+				SHA: github.Ptr("abc123"),
+				Ref: github.Ptr("feature-branch"),
 				Repo: &github.Repository{
-					Owner: &github.User{Login: github.String("owner")},
-					Name:  github.String("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+					Name:  github.Ptr("repo"),
 				},
 			},
-			State: github.String("open"),
+			State: github.Ptr("open"),
 		}
-		json.NewEncoder(w).Encode(&pr)
+		_ = json.NewEncoder(w).Encode(&pr)
 	})
 
 	// Mock PR list endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		pr := github.PullRequest{
-			Number: github.Int(0),
+			Number: github.Ptr(0),
 			Head: &github.PullRequestBranch{
-				SHA: github.String("abc123"),
-				Ref: github.String("feature-branch"),
+				SHA: github.Ptr("abc123"),
+				Ref: github.Ptr("feature-branch"),
 			},
-			State: github.String("open"),
+			State: github.Ptr("open"),
 		}
-		json.NewEncoder(w).Encode([]*github.PullRequest{&pr})
+		_ = json.NewEncoder(w).Encode([]*github.PullRequest{&pr})
 	})
 
 	// Mock config file endpoint with feedback settings
@@ -1158,18 +1158,18 @@ workflows:
 `, verbose, workflowsReport)
 
 		content := github.RepositoryContent{
-			Content:  github.String(configContent),
-			Encoding: github.String(""),
+			Content:  github.Ptr(configContent),
+			Encoding: github.Ptr(""),
 		}
-		json.NewEncoder(w).Encode(&content)
+		_ = json.NewEncoder(w).Encode(&content)
 	})
 
 	// Mock PR files endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls/0/files", func(w http.ResponseWriter, r *http.Request) {
 		files := []*github.CommitFile{
-			{Filename: github.String("test.go")},
+			{Filename: github.Ptr("test.go")},
 		}
-		json.NewEncoder(w).Encode(files)
+		_ = json.NewEncoder(w).Encode(files)
 	})
 
 	// Mock workflow dispatch endpoint
@@ -1180,34 +1180,34 @@ workflows:
 	// Mock check runs list endpoint
 	mux.HandleFunc("/repos/owner/repo/commits/abc123/check-runs", func(w http.ResponseWriter, r *http.Request) {
 		checkRuns := github.ListCheckRunsResults{
-			Total:     github.Int(0),
+			Total:     github.Ptr(0),
 			CheckRuns: []*github.CheckRun{},
 		}
-		json.NewEncoder(w).Encode(&checkRuns)
+		_ = json.NewEncoder(w).Encode(&checkRuns)
 	})
 
 	// Mock check runs create endpoint
 	mux.HandleFunc("/repos/owner/repo/check-runs", func(w http.ResponseWriter, r *http.Request) {
 		checkRun := github.CheckRun{
-			ID: github.Int64(1),
+			ID: github.Ptr(int64(1)),
 		}
-		json.NewEncoder(w).Encode(&checkRun)
+		_ = json.NewEncoder(w).Encode(&checkRun)
 	})
 
 	// Mock issue comments endpoint
 	mux.HandleFunc("/repos/owner/repo/issues/0/comments", func(w http.ResponseWriter, r *http.Request) {
 		comment := github.IssueComment{
-			ID: github.Int64(1),
+			ID: github.Ptr(int64(1)),
 		}
-		json.NewEncoder(w).Encode(&comment)
+		_ = json.NewEncoder(w).Encode(&comment)
 	})
 
 	// Mock reactions endpoint
 	mux.HandleFunc("/repos/owner/repo/issues/comments/1/reactions", func(w http.ResponseWriter, r *http.Request) {
 		reaction := github.Reaction{
-			ID: github.Int64(1),
+			ID: github.Ptr(int64(1)),
 		}
-		json.NewEncoder(w).Encode(&reaction)
+		_ = json.NewEncoder(w).Encode(&reaction)
 	})
 
 	return httptest.NewServer(mux)

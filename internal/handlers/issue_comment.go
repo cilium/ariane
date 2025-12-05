@@ -95,7 +95,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		if !strings.HasPrefix(commentAuthor, repositoryOwner) {
 			comment := fmt.Sprintf("Issue comment was created by an unsupported bot: %s", commentAuthor)
 			logger.Debug().Msg(comment)
-			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+			_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 			return nil
 		}
 		// comment created by the cilium-* [bot]
@@ -107,7 +107,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	if err != nil {
 		comment := fmt.Sprintf("Failed to retrieve pull request: %v", err)
 		logger.Error().Err(err).Msg(comment)
-		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+		_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		return err
 	}
 
@@ -118,7 +118,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	if err != nil {
 		comment := "Failed to retrieve config file"
 		logger.Error().Err(err).Msg(comment)
-		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+		_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		return err
 	}
 
@@ -130,7 +130,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		// Maybe alternative feedback mechanisms should be explored to communicate the rejection status clearly.
 		if arianeConfig.GetVerbose() {
 			comment := fmt.Sprintf("Comment by %s not allowed", commentAuthor)
-			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+			_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		}
 		return nil
 	}
@@ -141,7 +141,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	if submatch == nil {
 		if arianeConfig.GetVerbose() {
 			comment := fmt.Sprintf("Command %s not found", commentBody)
-			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+			_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		}
 		return nil
 	}
@@ -153,7 +153,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	if err != nil {
 		comment := fmt.Sprintf("Failed to retrieve pull request files: %v", err)
 		if arianeConfig.GetVerbose() {
-			h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+			_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 		}
 		return err
 	}
@@ -170,7 +170,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	// Build summary comment with workflow status table
 	if arianeConfig.GetVerbose() && arianeConfig.GetWorkflowsReport() && len(workflowStatuses) > 0 {
 		comment := h.buildWorkflowStatusTable(workflowStatuses)
-		h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
+		_ = h.commentOnPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, comment, logger)
 	}
 
 	if err := h.reactToComment(ctx, client, repositoryOwner, repositoryName, commentID, logger); err != nil {
@@ -258,7 +258,7 @@ func (h *PRCommentHandler) getStatusEmoji(status workflowStatusType) string {
 
 func (h *PRCommentHandler) commentOnPullRequest(ctx context.Context, client *github.Client, owner, repo string, prNumber int, replyBody string, logger zerolog.Logger) error {
 	comment := &github.IssueComment{
-		Body: github.String(replyBody),
+		Body: github.Ptr(replyBody),
 	}
 	_, _, err := client.Issues.CreateComment(ctx, owner, repo, prNumber, comment)
 	if err != nil {
