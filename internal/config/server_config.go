@@ -15,24 +15,32 @@ import (
 )
 
 const (
-	DefaultRunDelay      = 30 * time.Second
-	DefaultServerAddress = "127.0.0.1"
-	DefaultServerPort    = 8080
-	DefaultVersion       = "0.0.1-dirty"
-	ServerConfigPath     = "server-config.yaml"
+	DefaultRunDelay         = 30 * time.Second
+	DefaultServerAddress    = "127.0.0.1"
+	DefaultServerPort       = 8080
+	DefaultVersion          = "0.0.1-dirty"
+	DefaultMaxRetryAttempts = 3
+	DefaultClientTimeout    = 10 * time.Second
+	ServerConfigPath        = "server-config.yaml"
 )
 
 type ServerConfig struct {
-	Server HTTPConfig       `yaml:"server"`
-	Github githubapp.Config `yaml:"github"`
-	// RunDelay represents delay between running Commit Status Start job and re-running failed tests
-	RunDelay time.Duration `yaml:"runDelay"`
-	Version  string        `yaml:"version"`
+	Server  HTTPConfig       `yaml:"server"`
+	Github  githubapp.Config `yaml:"github"`
+	Client  ClientConfig     `yaml:"client"`
+	Version string           `yaml:"version"`
 }
 
 type HTTPConfig struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
+}
+
+type ClientConfig struct {
+	// RunDelay represents delay between running Commit Status Start job and re-running failed tests
+	RunDelay         time.Duration `yaml:"runDelay"`
+	Timeout          time.Duration `yaml:"timeout"`
+	MaxRetryAttempts int           `yaml:"maxRetryAttempts"`
 }
 
 func ReadServerConfig(path string) (*ServerConfig, error) {
@@ -85,16 +93,32 @@ func (s *ServerConfig) SetValuesFromEnv(prefix string) {
 		}
 	}
 
-	s.RunDelay = DefaultRunDelay
-	if v, ok := os.LookupEnv(prefix + "ARIANE_RUN_DELAY"); ok {
-		delay, err := time.ParseDuration(v)
-		if err == nil {
-			s.RunDelay = delay
-		}
-	}
-
 	s.Version = DefaultVersion
 	if v, ok := os.LookupEnv(prefix + "ARIANE_VERSION"); ok {
 		s.Version = v
+	}
+
+	s.Client.RunDelay = DefaultRunDelay
+	if v, ok := os.LookupEnv(prefix + "ARIANE_RUN_DELAY"); ok {
+		delay, err := time.ParseDuration(v)
+		if err == nil {
+			s.Client.RunDelay = delay
+		}
+	}
+
+	s.Client.Timeout = DefaultClientTimeout
+	if v, ok := os.LookupEnv(prefix + "ARIANE_CLIENT_TIMEOUT"); ok {
+		timeout, err := time.ParseDuration(v)
+		if err == nil {
+			s.Client.Timeout = timeout
+		}
+	}
+
+	s.Client.MaxRetryAttempts = DefaultMaxRetryAttempts
+	if v, ok := os.LookupEnv(prefix + "ARIANE_MAX_RETRY_ATTEMPTS"); ok {
+		attempts, err := strconv.Atoi(v)
+		if err == nil && attempts > 0 {
+			s.Client.MaxRetryAttempts = attempts
+		}
 	}
 }

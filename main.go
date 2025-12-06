@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/gregjones/httpcache"
 	"github.com/palantir/go-githubapp/githubapp"
@@ -34,8 +33,8 @@ func main() {
 
 	cc, err := githubapp.NewDefaultCachingClientCreator(
 		serverConfig.Github,
-		githubapp.WithClientUserAgent("cilium-ariane/0.0.1"),
-		githubapp.WithClientTimeout(3*time.Second),
+		githubapp.WithClientUserAgent("isovalent-ariane/0.0.1"),
+		githubapp.WithClientTimeout(serverConfig.Client.Timeout),
 		githubapp.WithClientCaching(false, func() httpcache.Cache { return httpcache.NewMemoryCache() }),
 	)
 
@@ -43,7 +42,11 @@ func main() {
 		panic(err)
 	}
 
-	prCommentHandler := &handlers.PRCommentHandler{ClientCreator: cc, RunDelay: serverConfig.RunDelay}
+	prCommentHandler := &handlers.PRCommentHandler{
+		ClientCreator:    cc,
+		RunDelay:         serverConfig.Client.RunDelay,
+		MaxRetryAttempts: serverConfig.Client.MaxRetryAttempts,
+	}
 	mergeGroupHandler := &handlers.MergeGroupHandler{ClientCreator: cc}
 	webhookHandler := githubapp.NewDefaultEventDispatcher(serverConfig.Github, prCommentHandler, mergeGroupHandler)
 

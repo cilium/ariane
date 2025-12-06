@@ -1,7 +1,11 @@
 server:
   address: "127.0.0.1"
   port: 8080
+
+client:
   runDelay: 30s
+  timeout: 10s
+  maxRetryAttempts: 3
 
 github:
   v3_api_url: "https://api.github.com/"

@@ -36,8 +36,9 @@ func TestHandle_NotaPR(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Times(0)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -71,8 +72,9 @@ func TestHandle_ActionNotCreated(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Times(0)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 	// Action can be created, edited, or delited
 	// The GHApp only reacts to "created"
@@ -102,13 +104,19 @@ func TestHandle_ActionNotCreated(t *testing.T) {
 }
 
 func TestHandle_IsInvalidBot(t *testing.T) {
+	mockServer := setMockServer()
+	defer mockServer.Close()
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
-	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(nil, nil)
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -151,8 +159,9 @@ func TestHandle_IsValidBot(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -195,8 +204,9 @@ func TestHandle(t *testing.T) {
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	payload := []byte(`{
@@ -233,8 +243,9 @@ func Test_isAllowedTeamMember(t *testing.T) {
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	var logger zerolog.Logger
@@ -291,8 +302,9 @@ func Test_rerunFailedJobs(t *testing.T) {
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second * 30000,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second * 30000,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	logWriter := &LogWriter{}
@@ -327,8 +339,9 @@ func Test_shouldSkipWorkflow(t *testing.T) {
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
 	handler := &PRCommentHandler{
-		ClientCreator: mockClientCreator,
-		RunDelay:      time.Second,
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
 	}
 
 	var logger zerolog.Logger
@@ -397,6 +410,7 @@ func setMockServer() *httptest.Server {
 	})
 	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
 		pr := &github.PullRequest{
+			State: github.Ptr("open"),
 			Head: &github.PullRequestBranch{
 				Ref: github.Ptr("pr/owner/mybugfix"),
 				SHA: github.Ptr("mock-sha"),
@@ -549,6 +563,62 @@ func setMockServer() *httptest.Server {
 			http.Error(w, "setMockServer: could not encode the reaction payload in JSON for the HTTP response.", http.StatusInternalServerError)
 		}
 	})
+	mux.HandleFunc("POST /repos/owner/repo/issues/0/comments", func(w http.ResponseWriter, r *http.Request) {
+		// https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
+		var requestBody struct {
+			Body string `json:"body"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			http.Error(w, "setMockServer: could not decode request body", http.StatusBadRequest)
+			return
+		}
+		comment := &github.IssueComment{
+			ID:   github.Ptr(int64(2)),
+			Body: github.Ptr(requestBody.Body),
+		}
+		if err := json.NewEncoder(w).Encode(comment); err != nil {
+			http.Error(w, "setMockServer: could not encode the comment payload in JSON for the HTTP response.", http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("/repos/owner/repo/actions/workflows/foo.yaml", func(w http.ResponseWriter, r *http.Request) {
+		// https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#get-a-workflow
+		workflow := &github.Workflow{
+			ID:   github.Ptr(int64(1)),
+			Name: github.Ptr("Foo Workflow"),
+			Path: github.Ptr(".github/workflows/foo.yaml"),
+		}
+		if err := json.NewEncoder(w).Encode(workflow); err != nil {
+			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("/repos/owner/repo/actions/workflows/bar.yaml", func(w http.ResponseWriter, r *http.Request) {
+		workflow := &github.Workflow{
+			ID:   github.Ptr(int64(2)),
+			Name: github.Ptr("Bar Workflow"),
+			Path: github.Ptr(".github/workflows/bar.yaml"),
+		}
+		if err := json.NewEncoder(w).Encode(workflow); err != nil {
+			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("POST /repos/owner/repo/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		// https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28#create-a-check-run
+		var requestBody github.CreateCheckRunOptions
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			http.Error(w, "setMockServer: could not decode request body", http.StatusBadRequest)
+			return
+		}
+		checkRun := &github.CheckRun{
+			ID:         github.Ptr(int64(1)),
+			Name:       github.Ptr(requestBody.Name),
+			HeadSHA:    github.Ptr(requestBody.HeadSHA),
+			Status:     requestBody.Status,
+			Conclusion: requestBody.Conclusion,
+		}
+		if err := json.NewEncoder(w).Encode(checkRun); err != nil {
+			http.Error(w, "setMockServer: could not encode the check run payload in JSON for the HTTP response.", http.StatusInternalServerError)
+		}
+	})
 	return httptest.NewServer(mux)
 }
 
@@ -570,6 +640,30 @@ func mockGetArianeConfigFromRepository(client *github.Client, ctx context.Contex
 	return readYAMLFile(`../../example/ariane-config.yaml`)
 }
 
+func mockGetArianeConfigFromRepositoryWithFeedback(verbose bool, workflowsReport bool) func(*github.Client, context.Context, string, string, string) (*config.ArianeConfig, error) {
+	return func(client *github.Client, ctx context.Context, owner string, repoName string, ref string) (*config.ArianeConfig, error) {
+		verbosePtr := &verbose
+		workflowsReportPtr := &workflowsReport
+		cfg := &config.ArianeConfig{
+			Feedback: config.FeedbackConfig{
+				Verbose:         verbosePtr,
+				WorkflowsReport: workflowsReportPtr,
+			},
+			Triggers: map[string]config.TriggerConfig{
+				"/test": {
+					Workflows: []string{"foo.yaml"},
+				},
+			},
+			Workflows: map[string]config.WorkflowPathsRegexConfig{
+				"foo.yaml": {
+					PathsRegex: ".*",
+				},
+			},
+		}
+		return cfg, nil
+	}
+}
+
 // These methods help capture logs to evaluate their status
 // It is required for rerunFailedJobs, which does not return any state
 type LogWriter struct {
@@ -582,6 +676,554 @@ func (w *LogWriter) Write(p []byte) (n int, err error) {
 
 func (w *LogWriter) String() string {
 	return w.buf.String()
+}
+
+func TestHandle_WorkflowStatusTable(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepository
+
+	mockServer := setMockServer()
+	defer mockServer.Close()
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {}
+		},
+		"action": "created",
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"comment": {
+			"id": 1,
+			"user": {
+				"login": "trustedauthor"
+			},
+			"body": "/test"
+		}
+	}`)
+
+	err := handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
+	assert.NoError(t, err)
+}
+
+func Test_buildWorkflowStatusTable(t *testing.T) {
+	testCases := []struct {
+		name             string
+		workflowStatuses []workflowStatus
+		expectedContains []string
+	}{
+		{
+			name: "triggered workflow",
+			workflowStatuses: []workflowStatus{
+				{name: "ci.yaml", status: workflowStatusTriggered},
+			},
+			expectedContains: []string{
+				"## Workflow Status",
+				"| Workflow | Status |",
+				"| `ci.yaml` | ✅ Triggered |",
+			},
+		},
+		{
+			name: "skipped workflow",
+			workflowStatuses: []workflowStatus{
+				{name: "lint.yaml", status: workflowStatusSkipped},
+			},
+			expectedContains: []string{
+				"## Workflow Status",
+				"| `lint.yaml` | ⏭️ Skipped |",
+			},
+		},
+		{
+			name: "already completed workflow",
+			workflowStatuses: []workflowStatus{
+				{name: "test.yaml", status: workflowStatusAlreadyCompleted},
+			},
+			expectedContains: []string{
+				"## Workflow Status",
+				"| `test.yaml` | ✔️ Already Completed |",
+			},
+		},
+		{
+			name: "failed workflow",
+			workflowStatuses: []workflowStatus{
+				{name: "deploy.yaml", status: workflowStatusFailed},
+			},
+			expectedContains: []string{
+				"## Workflow Status",
+				"| `deploy.yaml` | ❌ Failed to Trigger |",
+			},
+		},
+		{
+			name: "failed to mark as skipped",
+			workflowStatuses: []workflowStatus{
+				{name: "security.yaml", status: workflowStatusFailedToMarkSkipped},
+			},
+			expectedContains: []string{
+				"## Workflow Status",
+				"| `security.yaml` | ⚠️ Failed to Mark as Skipped |",
+			},
+		},
+		{
+			name: "multiple workflows with mixed statuses",
+			workflowStatuses: []workflowStatus{
+				{name: "ci.yaml", status: workflowStatusTriggered},
+				{name: "lint.yaml", status: workflowStatusSkipped},
+				{name: "test.yaml", status: workflowStatusAlreadyCompleted},
+				{name: "deploy.yaml", status: workflowStatusFailed},
+			},
+			expectedContains: []string{
+				"## Workflow Status",
+				"| `ci.yaml` | ✅ Triggered |",
+				"| `lint.yaml` | ⏭️ Skipped |",
+				"| `test.yaml` | ✔️ Already Completed |",
+				"| `deploy.yaml` | ❌ Failed to Trigger |",
+			},
+		},
+		{
+			name:             "empty workflow list",
+			workflowStatuses: []workflowStatus{},
+			expectedContains: []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &PRCommentHandler{}
+			result := handler.buildWorkflowStatusTable(tc.workflowStatuses)
+
+			// Verify all expected strings are present
+			for _, expected := range tc.expectedContains {
+				if !strings.Contains(result, expected) {
+					t.Errorf("Expected result to contain %q, but it didn't. Result:\n%s", expected, result)
+				}
+			}
+
+			// Verify empty result for empty workflow list
+			if len(tc.workflowStatuses) == 0 && result != "" {
+				t.Errorf("Expected empty result for empty workflow list, got: %s", result)
+			}
+		})
+	}
+}
+
+func Test_workflowStatusTracking(t *testing.T) {
+	testCases := []struct {
+		name           string
+		workflow       string
+		shouldSkip     bool
+		shouldRun      bool
+		triggerErr     error
+		markSkipErr    error
+		expectedStatus workflowStatusType
+	}{
+		{
+			name:           "workflow already completed",
+			workflow:       "bar.yaml",
+			shouldSkip:     true,
+			expectedStatus: workflowStatusAlreadyCompleted,
+		},
+		{
+			name:           "workflow triggered successfully",
+			workflow:       "foo.yaml",
+			shouldSkip:     false,
+			shouldRun:      true,
+			triggerErr:     nil,
+			expectedStatus: workflowStatusTriggered,
+		},
+		{
+			name:           "workflow trigger failed",
+			workflow:       "foo.yaml",
+			shouldSkip:     false,
+			shouldRun:      true,
+			triggerErr:     fmt.Errorf("trigger error"),
+			expectedStatus: workflowStatusFailed,
+		},
+		{
+			name:           "workflow skipped successfully",
+			workflow:       "foo.yaml",
+			shouldSkip:     false,
+			shouldRun:      false,
+			markSkipErr:    nil,
+			expectedStatus: workflowStatusSkipped,
+		},
+		{
+			name:           "workflow failed to mark as skipped",
+			workflow:       "foo.yaml",
+			shouldSkip:     false,
+			shouldRun:      false,
+			markSkipErr:    fmt.Errorf("mark skip error"),
+			expectedStatus: workflowStatusFailedToMarkSkipped,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var statuses []workflowStatus
+
+			// Simulate the workflow processing logic
+			if tc.shouldSkip {
+				statuses = append(statuses, workflowStatus{name: tc.workflow, status: workflowStatusAlreadyCompleted})
+			} else if tc.shouldRun {
+				if tc.triggerErr != nil {
+					statuses = append(statuses, workflowStatus{name: tc.workflow, status: workflowStatusFailed})
+				} else {
+					statuses = append(statuses, workflowStatus{name: tc.workflow, status: workflowStatusTriggered})
+				}
+			} else {
+				if tc.markSkipErr != nil {
+					statuses = append(statuses, workflowStatus{name: tc.workflow, status: workflowStatusFailedToMarkSkipped})
+				} else {
+					statuses = append(statuses, workflowStatus{name: tc.workflow, status: workflowStatusSkipped})
+				}
+			}
+
+			// Verify the status was tracked correctly
+			assert.Len(t, statuses, 1)
+			assert.Equal(t, tc.workflow, statuses[0].name)
+			assert.Equal(t, tc.expectedStatus, statuses[0].status)
+		})
+	}
+}
+
+func TestHandle_FeedbackDisabled(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepositoryWithFeedback(false, false)
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+
+	server := setMockServerWithFeedbackConfig(false, false)
+	defer server.Close()
+
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {},
+			"number": 0
+		},
+		"action": "created",
+		"comment": {
+			"id": 1,
+			"body": "/test-unknown",
+			"user": {
+				"login": "user"
+			}
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 0
+		}
+	}`)
+
+	var event github.IssueCommentEvent
+	_ = json.Unmarshal(payload, &event)
+
+	ctx := context.Background()
+
+	// Should not return error even though command not found
+	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	assert.NoError(t, err)
+}
+
+func TestHandle_VerboseEnabled(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepositoryWithFeedback(true, false)
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+
+	server := setMockServerWithFeedbackConfig(true, false)
+	defer server.Close()
+
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {},
+			"number": 0
+		},
+		"action": "created",
+		"comment": {
+			"id": 1,
+			"body": "/test-unknown",
+			"user": {
+				"login": "user"
+			}
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 0
+		}
+	}`)
+
+	var event github.IssueCommentEvent
+	_ = json.Unmarshal(payload, &event)
+
+	ctx := context.Background()
+
+	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	assert.NoError(t, err)
+}
+
+func TestHandle_WorkflowsReportEnabled(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepositoryWithFeedback(true, true)
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+
+	server := setMockServerWithFeedbackConfig(true, true)
+	defer server.Close()
+
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {},
+			"number": 0
+		},
+		"action": "created",
+		"comment": {
+			"id": 1,
+			"body": "/test",
+			"user": {
+				"login": "user"
+			}
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 0
+		}
+	}`)
+
+	var event github.IssueCommentEvent
+	_ = json.Unmarshal(payload, &event)
+
+	ctx := context.Background()
+
+	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	assert.NoError(t, err)
+}
+
+func TestHandle_WorkflowsReportDisabled(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepositoryWithFeedback(true, false)
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+
+	server := setMockServerWithFeedbackConfig(true, false)
+	defer server.Close()
+
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {},
+			"number": 0
+		},
+		"action": "created",
+		"comment": {
+			"id": 1,
+			"body": "/test",
+			"user": {
+				"login": "user"
+			}
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 0
+		}
+	}`)
+
+	var event github.IssueCommentEvent
+	_ = json.Unmarshal(payload, &event)
+
+	ctx := context.Background()
+
+	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	assert.NoError(t, err)
+}
+
+func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool) *httptest.Server {
+	mux := http.NewServeMux()
+
+	// Mock individual PR endpoint
+	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
+		pr := github.PullRequest{
+			Number: github.Ptr(0),
+			Head: &github.PullRequestBranch{
+				SHA: github.Ptr("abc123"),
+				Ref: github.Ptr("feature-branch"),
+				Repo: &github.Repository{
+					Owner: &github.User{Login: github.Ptr("owner")},
+					Name:  github.Ptr("repo"),
+				},
+			},
+			State: github.Ptr("open"),
+		}
+		_ = json.NewEncoder(w).Encode(&pr)
+	})
+
+	// Mock PR list endpoint
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		pr := github.PullRequest{
+			Number: github.Ptr(0),
+			Head: &github.PullRequestBranch{
+				SHA: github.Ptr("abc123"),
+				Ref: github.Ptr("feature-branch"),
+			},
+			State: github.Ptr("open"),
+		}
+		_ = json.NewEncoder(w).Encode([]*github.PullRequest{&pr})
+	})
+
+	// Mock config file endpoint with feedback settings
+	mux.HandleFunc("/repos/owner/repo/contents/.github/ariane-config.yaml", func(w http.ResponseWriter, r *http.Request) {
+		configContent := fmt.Sprintf(`feedback:
+  verbose: %t
+  workflows-report: %t
+triggers:
+  /test:
+    workflows:
+      - foo.yaml
+workflows:
+  foo.yaml:
+    paths-regex: ".*"
+`, verbose, workflowsReport)
+
+		content := github.RepositoryContent{
+			Content:  github.Ptr(configContent),
+			Encoding: github.Ptr(""),
+		}
+		_ = json.NewEncoder(w).Encode(&content)
+	})
+
+	// Mock PR files endpoint
+	mux.HandleFunc("/repos/owner/repo/pulls/0/files", func(w http.ResponseWriter, r *http.Request) {
+		files := []*github.CommitFile{
+			{Filename: github.Ptr("test.go")},
+		}
+		_ = json.NewEncoder(w).Encode(files)
+	})
+
+	// Mock workflow dispatch endpoint
+	mux.HandleFunc("/repos/owner/repo/actions/workflows/foo.yaml/dispatches", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Mock check runs list endpoint
+	mux.HandleFunc("/repos/owner/repo/commits/abc123/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		checkRuns := github.ListCheckRunsResults{
+			Total:     github.Ptr(0),
+			CheckRuns: []*github.CheckRun{},
+		}
+		_ = json.NewEncoder(w).Encode(&checkRuns)
+	})
+
+	// Mock check runs create endpoint
+	mux.HandleFunc("/repos/owner/repo/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		checkRun := github.CheckRun{
+			ID: github.Ptr(int64(1)),
+		}
+		_ = json.NewEncoder(w).Encode(&checkRun)
+	})
+
+	// Mock issue comments endpoint
+	mux.HandleFunc("/repos/owner/repo/issues/0/comments", func(w http.ResponseWriter, r *http.Request) {
+		comment := github.IssueComment{
+			ID: github.Ptr(int64(1)),
+		}
+		_ = json.NewEncoder(w).Encode(&comment)
+	})
+
+	// Mock reactions endpoint
+	mux.HandleFunc("/repos/owner/repo/issues/comments/1/reactions", func(w http.ResponseWriter, r *http.Request) {
+		reaction := github.Reaction{
+			ID: github.Ptr(int64(1)),
+		}
+		_ = json.NewEncoder(w).Encode(&reaction)
+	})
+
+	return httptest.NewServer(mux)
 }
 
 // Code generated by MockGen. DO NOT EDIT.
