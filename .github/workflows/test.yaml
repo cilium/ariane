@@ -7,6 +7,7 @@ on:
     types:
       - opened
       - reopened
+      - synchronize
 
 permissions:
   # To be able to access the repository with actions/checkout
