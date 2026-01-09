@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v79/github"
+	"github.com/google/go-github/v81/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
 
