@@ -106,6 +106,10 @@
       enabled: false,
     },
     {
+      "matchManagers": ["gomod"],
+      "postUpdateOptions": ["gomodUpdateImportPaths", "gomodTidy"]
+    },
+    {
       // Disable Go minor version updates
       // Only allow updates when palantir/go-githubapp upgrades the Go minor version
       matchDatasources: [
