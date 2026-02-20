@@ -155,7 +155,7 @@ func TestPostWorkflowStatusComment(t *testing.T) {
 
 			for _, ws := range tc.statuses {
 				statusEmoji := handler.getStatusEmoji(ws.status)
-				commentBuilder.WriteString(fmt.Sprintf("| `%s` | %s |\n", ws.name, statusEmoji))
+				fmt.Fprintf(&commentBuilder, "| `%s` | %s |\n", ws.name, statusEmoji)
 			}
 
 			result := commentBuilder.String()

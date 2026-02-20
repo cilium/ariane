@@ -20,7 +20,7 @@ import (
 	reflect "reflect"
 
 	"github.com/cilium/ariane/internal/config"
-	github "github.com/google/go-github/v82/github"
+	github "github.com/google/go-github/v83/github"
 	"github.com/rs/zerolog"
 	githubv4 "github.com/shurcooL/githubv4"
 	gomock "go.uber.org/mock/gomock"
