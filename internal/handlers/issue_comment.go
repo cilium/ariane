@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v82/github"
+	"github.com/google/go-github/v83/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
 
@@ -234,7 +234,7 @@ func (h *PRCommentHandler) buildWorkflowStatusTable(workflowStatuses []workflowS
 
 	for _, ws := range workflowStatuses {
 		statusEmoji := h.getStatusEmoji(ws.status)
-		commentBuilder.WriteString(fmt.Sprintf("| `%s` | %s |\n", ws.name, statusEmoji))
+		fmt.Fprintf(&commentBuilder, "| `%s` | %s |\n", ws.name, statusEmoji)
 	}
 
 	return commentBuilder.String()

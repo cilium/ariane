@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ariane/internal/log"
-	"github.com/google/go-github/v82/github"
+	"github.com/google/go-github/v83/github"
 	"github.com/palantir/go-githubapp/githubapp"
 )
 

@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/google/go-github/v82/github"
+	"github.com/google/go-github/v83/github"
 	"gopkg.in/yaml.v3"
 
 	"github.com/cilium/ariane/internal/log"

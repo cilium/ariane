@@ -3,9 +3,9 @@ module github.com/cilium/ariane
 go 1.25.0
 
 require (
-	github.com/google/go-github/v82 v82.0.0
+	github.com/google/go-github/v83 v83.0.0
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
-	github.com/palantir/go-githubapp v0.41.0
+	github.com/palantir/go-githubapp v0.42.0
 	github.com/rs/zerolog v1.34.0
 	github.com/shurcooL/githubv4 v0.0.0-20260209031235-2402fdf4a9ed
 	github.com/stretchr/testify v1.11.1
@@ -28,6 +28,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
-	github.com/shurcooL/graphql v0.0.0-20230722043721-ed46e5a46466 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	github.com/shurcooL/graphql v0.0.0-20240915155400-7ee5256398cf // indirect
+	golang.org/x/sys v0.41.0 // indirect
 )
