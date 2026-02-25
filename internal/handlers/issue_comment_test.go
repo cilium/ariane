@@ -239,15 +239,6 @@ func Test_isAllowedTeamMember(t *testing.T) {
 	client := github.NewClient(nil)
 	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
 
-	mockCtrl := gomock.NewController(t)
-	mockClientCreator := NewMockClientCreator(mockCtrl)
-
-	handler := &PRCommentHandler{
-		ClientCreator:    mockClientCreator,
-		RunDelay:         time.Second,
-		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
-	}
-
 	var logger zerolog.Logger
 	testCases := []struct {
 		ArianeConfig   *config.ArianeConfig
@@ -281,7 +272,7 @@ func Test_isAllowedTeamMember(t *testing.T) {
 		},
 	}
 	for idx, testCase := range testCases {
-		result := handler.isAllowedTeamMember(context.Background(), client, testCase.ArianeConfig, "owner", testCase.Author, logger)
+		result := isAllowedTeamMember(context.Background(), client, testCase.ArianeConfig, "owner", testCase.Author, logger)
 		if result != testCase.ExpectedResult {
 			t.Errorf(
 				`[TEST%v] isAllowedTeamMember failed.
@@ -309,8 +300,18 @@ func Test_rerunFailedJobs(t *testing.T) {
 
 	logWriter := &LogWriter{}
 	logger := zerolog.New(logWriter)
+
+	processor := &WorkflowProcessor{
+		client:       client,
+		arianeConfig: &config.ArianeConfig{},
+		owner:        "owner",
+		repo:         "repo",
+		logger:       logger,
+		runDelay:     handler.RunDelay,
+	}
+
 	var wg sync.WaitGroup
-	handler.rerunFailedJobs(context.Background(), client, "owner", "repo", "foobar.yaml", int64(99), &wg, logger)
+	processor.rerunFailedJobs(context.Background(), "foobar.yaml", int64(99), &wg)
 	wg.Wait()
 	var result struct {
 		Level   string `json:"level,omitempty"`
@@ -345,6 +346,15 @@ func Test_shouldSkipWorkflow(t *testing.T) {
 	}
 
 	var logger zerolog.Logger
+	processor := &WorkflowProcessor{
+		client:       client,
+		arianeConfig: &config.ArianeConfig{},
+		owner:        "owner",
+		repo:         "repo",
+		logger:       logger,
+		runDelay:     handler.RunDelay,
+	}
+
 	testCases := []struct {
 		Workflow       string
 		ExpectedResult bool
@@ -362,16 +372,13 @@ func Test_shouldSkipWorkflow(t *testing.T) {
 		},
 		{
 			Workflow:       "foobar.yaml",
-			ExpectedResult: false,
-			ExpectedReason: "status=completed, conclusion=failure are not skipped.",
-			// BUG(auriaave): https://github.com/cilium/ariane/issues/45
-			// ExpectedResult: true,
-			// ExpectedReason: "status=completed, conclusion=failure are re-run, and skipped.",
+			ExpectedResult: true,
+			ExpectedReason: "status=completed, conclusion=failure are re-run, and skipped.",
 		},
 	}
 
 	for idx, testCase := range testCases {
-		result := handler.shouldSkipWorkflow(context.Background(), client, "owner", "repo", testCase.Workflow, "mock-sha", logger)
+		result := processor.shouldSkipWorkflow(context.Background(), testCase.Workflow, "mock-sha")
 		if result != testCase.ExpectedResult {
 			t.Errorf(
 				`[TEST%v] shouldSkipWorkflow failed.
@@ -507,6 +514,60 @@ func setMockServer() *httptest.Server {
 						ID:         github.Ptr(int64(99)),
 						Status:     github.Ptr("completed"),
 						Conclusion: github.Ptr("failure"),
+						HeadSHA:    github.Ptr(SHA),
+					},
+				},
+			}
+		} else if workflow == "eventually-passing.yaml" {
+			workflowRuns = &github.WorkflowRuns{
+				TotalCount: github.Ptr(1),
+				WorkflowRuns: []*github.WorkflowRun{
+					{
+						ID:         github.Ptr(int64(99)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("success"),
+						HeadSHA:    github.Ptr(SHA),
+					},
+					{
+						ID:         github.Ptr(int64(9)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("failure"),
+						HeadSHA:    github.Ptr(SHA),
+					},
+				},
+			}
+		} else if workflow == "eventually-failing.yaml" {
+			workflowRuns = &github.WorkflowRuns{
+				TotalCount: github.Ptr(1),
+				WorkflowRuns: []*github.WorkflowRun{
+					{
+						ID:         github.Ptr(int64(99)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("failure"),
+						HeadSHA:    github.Ptr(SHA),
+					},
+					{
+						ID:         github.Ptr(int64(9)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("success"),
+						HeadSHA:    github.Ptr(SHA),
+					},
+				},
+			}
+		} else if workflow == "in-progress.yaml" {
+			workflowRuns = &github.WorkflowRuns{
+				TotalCount: github.Ptr(1),
+				WorkflowRuns: []*github.WorkflowRun{
+					{
+						ID:         github.Ptr(int64(99)),
+						Status:     github.Ptr("in_progress"),
+						Conclusion: github.Ptr("failure"),
+						HeadSHA:    github.Ptr(SHA),
+					},
+					{
+						ID:         github.Ptr(int64(9)),
+						Status:     github.Ptr("completed"),
+						Conclusion: github.Ptr("success"),
 						HeadSHA:    github.Ptr(SHA),
 					},
 				},
@@ -805,8 +866,7 @@ func Test_buildWorkflowStatusTable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := &PRCommentHandler{}
-			result := handler.buildWorkflowStatusTable(tc.workflowStatuses)
+			result := buildWorkflowStatusTable(tc.workflowStatuses)
 
 			// Verify all expected strings are present
 			for _, expected := range tc.expectedContains {
