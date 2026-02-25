@@ -9,7 +9,36 @@ triggers:
   /test-something-else:
     workflows:
       - baz.yaml
+  /default: #special trigger that runs when new PR is opened
+    workflows:
+      - this-will-run-on-every-open-pr.yaml
+  /dependent-on-default:
+    workflows:
+      - dependent.yaml
+    depends-on:
+      - /default
 
 workflows:
   foo.yaml:
     paths-ignore-regex: (bar|baz)/
+
+feedback:
+  verbose: true
+  workflows-report: true
+  report-all-workflows: true
+
+stages-config:
+  label: auto-cicd
+  stages:
+    - names:
+        - image-build-releases-ci.yaml
+        - tests-smoke.yaml
+      command: /test
+
+rerun:
+  max-retries: 3
+  workflows:
+    - conformance-e2e.yaml
+    - integration-test.yaml
+  exclude-workflows:
+    - flaky-test.yaml

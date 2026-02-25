@@ -26,11 +26,12 @@ func Test_CheckForTrigger(t *testing.T) {
 		comment           string
 		expectedSubmatch  []string
 		expectedWorkflows []string
+		expectedDependsOn []string
 	}{
 		{
 			config: config.ArianeConfig{
 				Triggers: map[string]config.TriggerConfig{
-					"/cute": {[]string{"cte.yaml"}},
+					"/cute": {Workflows: []string{"cte.yaml"}},
 				},
 			},
 			comment:           "/cute",
@@ -40,7 +41,7 @@ func Test_CheckForTrigger(t *testing.T) {
 		{
 			config: config.ArianeConfig{
 				Triggers: map[string]config.TriggerConfig{
-					"/cute": {[]string{"cte.yaml"}},
+					"/cute": {Workflows: []string{"cte.yaml"}},
 				},
 			},
 			comment: "/cute cilium/cute-nationwide",
@@ -48,7 +49,7 @@ func Test_CheckForTrigger(t *testing.T) {
 		{
 			config: config.ArianeConfig{
 				Triggers: map[string]config.TriggerConfig{
-					"/cute (.+)": {[]string{"cte.yaml"}},
+					"/cute (.+)": {Workflows: []string{"cte.yaml"}},
 				},
 			},
 			comment:           "/cute {\"repo\":\"zerohash\"}",
@@ -58,26 +59,209 @@ func Test_CheckForTrigger(t *testing.T) {
 		{
 			config: config.ArianeConfig{
 				Triggers: map[string]config.TriggerConfig{
-					`\invalid-reg-exp`: {[]string{"invalid.yaml"}},
+					`\invalid-reg-exp`: {Workflows: []string{"invalid.yaml"}},
 				},
 			},
 			comment: "/test invalid regex",
 		},
+		{
+			config: config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/test":   {Workflows: []string{"test.yaml"}},
+					"/deploy": {Workflows: []string{"deploy.yaml"}, DependsOn: []string{"/test"}},
+				},
+			},
+			comment:           "/deploy",
+			expectedSubmatch:  []string{"/deploy"},
+			expectedDependsOn: []string{"/test"},
+			expectedWorkflows: []string{"deploy.yaml"},
+		},
+		{
+			config: config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/test":   {Workflows: []string{"test.yaml"}},
+					"/deploy": {Workflows: []string{"deploy.yaml"}, DependsOn: []string{"/test"}},
+				},
+			},
+			comment:           "/deploy",
+			expectedSubmatch:  []string{"/deploy"},
+			expectedDependsOn: []string{"/test"},
+			expectedWorkflows: []string{"deploy.yaml"},
+		},
+	}
+	for i, tt := range cases {
+		actualSubmatch, actualWorkflows, actualDependsOn := tt.config.CheckForTrigger(ctx, tt.comment)
+
+		assert.Equal(t, tt.expectedSubmatch, actualSubmatch, "for index: %v", i)
+		assert.Equal(t, tt.expectedWorkflows, actualWorkflows, "for index: %v", i)
+		assert.Equal(t, tt.expectedDependsOn, actualDependsOn, "for index: %v", i)
+	}
+}
+
+func TestArianeConfigMerge(t *testing.T) {
+	cases := []struct {
+		config       *config.ArianeConfig
+		otherConfig  *config.ArianeConfig
+		mergedConfig *config.ArianeConfig
+	}{
+		{
+			config: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+			otherConfig: &config.ArianeConfig{},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+		},
+		{
+			config: &config.ArianeConfig{},
+			otherConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+		},
+		{
+			config: &config.ArianeConfig{},
+			otherConfig: &config.ArianeConfig{
+				AllowedTeams: []string{"team1"},
+			},
+			mergedConfig: &config.ArianeConfig{
+				AllowedTeams: []string{"team1"},
+			},
+		},
+		{
+			config: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+				},
+				Workflows: map[string]config.WorkflowPathsRegexConfig{
+					"foo.yaml": {
+						PathsIgnoreRegex: "(c|d)/",
+					},
+				},
+				AllowedTeams: []string{
+					"team1",
+				},
+			},
+			otherConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+				Workflows: map[string]config.WorkflowPathsRegexConfig{
+					"bar.yaml": {
+						PathsRegex: "(x|y)/",
+					},
+				},
+				AllowedTeams: []string{
+					"team2",
+				},
+			},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+				Workflows: map[string]config.WorkflowPathsRegexConfig{
+					"foo.yaml": {
+						PathsIgnoreRegex: "(c|d)/",
+					},
+					"bar.yaml": {
+						PathsRegex: "(x|y)/",
+					},
+				},
+				AllowedTeams: []string{
+					"team1",
+					"team2",
+				},
+			},
+		},
+		{
+			config: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}},
+				},
+				Workflows: map[string]config.WorkflowPathsRegexConfig{
+					"foo.yaml": {
+						PathsIgnoreRegex: "(c|d)/",
+					},
+				},
+				AllowedTeams: []string{
+					"team1",
+					"team3",
+				},
+			},
+			otherConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"enterprise-foo.yaml"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+				Workflows: map[string]config.WorkflowPathsRegexConfig{
+					"bar.yaml": {
+						PathsRegex: "(x|y)/",
+					},
+					"foo.yaml": {
+						PathsIgnoreRegex: ".*/",
+					},
+					"enterprise-foo.yaml": {
+						PathsRegex: "(y|z)/",
+					},
+				},
+				AllowedTeams: []string{
+					"team1",
+					"team2",
+				},
+			},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/bar": {Workflows: []string{"bar.yaml"}},
+					"/foo": {Workflows: []string{"foo.yaml", "enterprise-foo.yaml"}},
+				},
+				Workflows: map[string]config.WorkflowPathsRegexConfig{
+					"foo.yaml": {
+						PathsIgnoreRegex: ".*/",
+					},
+					"bar.yaml": {
+						PathsRegex: "(x|y)/",
+					},
+					"enterprise-foo.yaml": {
+						PathsRegex: "(y|z)/",
+					},
+				},
+				AllowedTeams: []string{
+					"team1",
+					"team3",
+					"team2",
+				},
+			},
+		},
 	}
 	for _, tt := range cases {
-		actualSubmatch, actualWorkflows := tt.config.CheckForTrigger(ctx, tt.comment)
+		mergedConfig := tt.config.Merge(tt.otherConfig)
 
-		assert.Equal(t, tt.expectedSubmatch, actualSubmatch)
-		assert.Equal(t, tt.expectedWorkflows, actualWorkflows)
+		assert.Equal(t, tt.mergedConfig, mergedConfig)
 	}
 }
 
 func Test_ShouldRunOnlyWorkflows(t *testing.T) {
 	config := &config.ArianeConfig{
 		Triggers: map[string]config.TriggerConfig{
-			"/foo":            {[]string{"foo.yaml"}},
-			"/bar":            {[]string{"bar.yaml"}},
-			"/enterprise-foo": {[]string{"enterprise-foo.yaml"}},
+			"/foo":            {Workflows: []string{"foo.yaml"}},
+			"/bar":            {Workflows: []string{"bar.yaml"}},
+			"/enterprise-foo": {Workflows: []string{"enterprise-foo.yaml"}},
 		},
 		Workflows: map[string]config.WorkflowPathsRegexConfig{},
 		AllowedTeams: []string{
@@ -151,9 +335,9 @@ func Test_ShouldRunOnlyWorkflows(t *testing.T) {
 func Test_ShouldRunWorkflow(t *testing.T) {
 	config := &config.ArianeConfig{
 		Triggers: map[string]config.TriggerConfig{
-			"/foo":            {[]string{"foo.yaml"}},
-			"/bar":            {[]string{"bar.yaml"}},
-			"/enterprise-foo": {[]string{"enterprise-foo.yaml"}},
+			"/foo":            {Workflows: []string{"foo.yaml"}},
+			"/bar":            {Workflows: []string{"bar.yaml"}},
+			"/enterprise-foo": {Workflows: []string{"enterprise-foo.yaml"}},
 		},
 		Workflows: map[string]config.WorkflowPathsRegexConfig{
 			"bar.yaml": {

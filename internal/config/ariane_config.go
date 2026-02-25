@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/google/go-github/v83/github"
@@ -24,6 +25,8 @@ type ArianeConfig struct {
 	Triggers     map[string]TriggerConfig            `yaml:"triggers"`
 	Workflows    map[string]WorkflowPathsRegexConfig `yaml:"workflows"`
 	AllowedTeams []string                            `yaml:"allowed-teams,omitempty"`
+	RerunConfig  *RerunConfig                        `yaml:"rerun,omitempty"`
+	StagesConfig *StagesConfig                       `yaml:"stages-config,omitempty"`
 }
 
 // FeedbackConfig contains configuration for feedback by ariane bot to the PR in the form of comments
@@ -38,6 +41,7 @@ type FeedbackConfig struct {
 
 type TriggerConfig struct {
 	Workflows []string `yaml:"workflows"`
+	DependsOn []string `yaml:"depends-on,omitempty"`
 }
 
 type WorkflowPathsRegexConfig struct {
@@ -45,8 +49,24 @@ type WorkflowPathsRegexConfig struct {
 	PathsIgnoreRegex string `yaml:"paths-ignore-regex"`
 }
 
-func GetArianeConfigFromRepository(client *github.Client, ctx context.Context, owner string, repoName string, ref string) (*ArianeConfig, error) {
-	fileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repoName, ArianeConfigPath, &github.RepositoryContentGetOptions{Ref: ref})
+type Stage struct {
+	Workflows []string `yaml:"workflows"`
+	Command   string   `yaml:"command"`
+}
+
+type StagesConfig struct {
+	Label  string  `yaml:"label,omitempty"`
+	Stages []Stage `yaml:"stages,omitempty"`
+}
+
+type RerunConfig struct {
+	Workflows        []string `yaml:"workflows,omitempty"`
+	ExcludeWorkflows []string `yaml:"exclude-workflows,omitempty"`
+	MaxRetries       int      `yaml:"max-retries,omitempty"`
+}
+
+func getArianeConfigFromRepository(client *github.Client, ctx context.Context, owner string, repoName string, configPath string, ref string) (*ArianeConfig, error) {
+	fileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repoName, configPath, &github.RepositoryContentGetOptions{Ref: ref})
 	if err != nil {
 		return nil, fmt.Errorf("failed downloading config file from repository: %w", err)
 	}
@@ -64,8 +84,19 @@ func GetArianeConfigFromRepository(client *github.Client, ctx context.Context, o
 	return &config, err
 }
 
+// GetArianeConfigFromRepository gets Ariane config from repository at given ref.
+func GetArianeConfigFromRepository(client *github.Client, ctx context.Context, owner string, repoName string, ref string) (*ArianeConfig, error) {
+	// Get OSS Ariane config first.
+	config, err := getArianeConfigFromRepository(client, ctx, owner, repoName, ArianeConfigPath, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
 // CheckForTrigger checks if any trigger registered in config match given comment.
-func (config *ArianeConfig) CheckForTrigger(ctx context.Context, comment string) ([]string, []string) {
+func (config *ArianeConfig) CheckForTrigger(ctx context.Context, comment string) (submatch []string, workflows []string, dependsOn []string) {
 	for regex, trigger := range config.Triggers {
 		re, err := regexp.Compile(`^` + regex + `$`)
 		if err != nil {
@@ -74,10 +105,10 @@ func (config *ArianeConfig) CheckForTrigger(ctx context.Context, comment string)
 		}
 		submatch := re.FindStringSubmatch(comment)
 		if submatch != nil {
-			return submatch, trigger.Workflows
+			return submatch, trigger.Workflows, trigger.DependsOn
 		}
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (c *ArianeConfig) GetVerbose() bool {
@@ -202,4 +233,56 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 	// the one we are evaluating, then do not run the WF
 	// Otherwise, do run it
 	return numberIgnoredFiles < len(files)
+}
+
+// Merge merges the ariane configuration given in other into the one given in config. A trigger or
+// workflow specified in other will take precedence over the one in config.
+func (config *ArianeConfig) Merge(other *ArianeConfig) *ArianeConfig {
+	if config.Triggers == nil && len(other.Triggers) > 0 {
+		config.Triggers = make(map[string]TriggerConfig)
+	}
+	for k, v := range other.Triggers {
+		// Append enterprise-only workflows to existing OSS ones instead of replacing them.
+		if trigger, ok := config.Triggers[k]; ok {
+			trigger.Workflows = append(trigger.Workflows, v.Workflows...)
+			config.Triggers[k] = trigger
+		} else {
+			config.Triggers[k] = v
+		}
+	}
+
+	if config.Workflows == nil && len(other.Workflows) > 0 {
+		config.Workflows = make(map[string]WorkflowPathsRegexConfig)
+	}
+	for k, v := range other.Workflows {
+		config.Workflows[k] = v
+	}
+
+	if len(config.AllowedTeams) == 0 {
+		config.AllowedTeams = other.AllowedTeams
+	} else {
+		slices.Sort(config.AllowedTeams)
+		for _, team := range other.AllowedTeams {
+			if !slices.Contains(config.AllowedTeams, team) {
+				config.AllowedTeams = append(config.AllowedTeams, team)
+			}
+		}
+	}
+
+	// Merge feedback configuration
+	if other.Feedback.Verbose != nil {
+		config.Feedback.Verbose = other.Feedback.Verbose
+	}
+	if other.Feedback.WorkflowsReport != nil {
+		config.Feedback.WorkflowsReport = other.Feedback.WorkflowsReport
+	}
+	if other.Feedback.ReportAllWorkflows != nil {
+		config.Feedback.ReportAllWorkflows = other.Feedback.ReportAllWorkflows
+	}
+
+	if other.StagesConfig != nil {
+		config.StagesConfig = other.StagesConfig
+	}
+
+	return config
 }
