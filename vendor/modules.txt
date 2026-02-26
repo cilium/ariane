@@ -23,6 +23,9 @@ github.com/gregjones/httpcache
 ## explicit; go 1.12
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
+# github.com/hmdsefi/gograph v0.7.0
+## explicit; go 1.24.2
+github.com/hmdsefi/gograph
 # github.com/kr/text v0.2.0
 ## explicit
 # github.com/mattn/go-colorable v0.1.14
