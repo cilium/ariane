@@ -17,7 +17,6 @@ triggers:
       - dependent.yaml
     depends-on:
       - /default
-
 workflows:
   foo.yaml:
     paths-ignore-regex: (bar|baz)/
@@ -30,7 +29,7 @@ feedback:
 stages-config:
   label: auto-cicd
   stages:
-    - names:
+    - workflows:
         - image-build-releases-ci.yaml
         - tests-smoke.yaml
       command: /test

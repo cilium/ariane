@@ -38,3 +38,5 @@ jobs:
     - name: Test
       run: go test ./...
 
+    - name: Lint example config
+      run: go run linter/main.go example/ariane-config.yaml
