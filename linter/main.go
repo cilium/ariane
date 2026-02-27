@@ -79,6 +79,7 @@ func parseAndValidate(path string) (*config.ArianeConfig, error) {
 		"allowed-teams": true,
 		"rerun":         true,
 		"stages-config": true,
+		"schedule":      true,
 	}
 	for key := range raw {
 		if !knownTopLevel[key] {
