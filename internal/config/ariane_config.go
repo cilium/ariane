@@ -245,6 +245,8 @@ func (config *ArianeConfig) Merge(other *ArianeConfig) *ArianeConfig {
 		// Append enterprise-only workflows to existing OSS ones instead of replacing them.
 		if trigger, ok := config.Triggers[k]; ok {
 			trigger.Workflows = append(trigger.Workflows, v.Workflows...)
+			// overwrite dependencies in case we override workflows in a trigger
+			trigger.DependsOn = v.DependsOn
 			config.Triggers[k] = trigger
 		} else {
 			config.Triggers[k] = v
