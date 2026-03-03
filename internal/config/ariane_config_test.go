@@ -135,6 +135,27 @@ func TestArianeConfigMerge(t *testing.T) {
 			},
 		},
 		{
+			config: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}, DependsOn: []string{"/bar"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+			otherConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{}, DependsOn: []string{"/baz"}},
+					"/baz": {Workflows: []string{"bar.yaml", "baz.yaml"}},
+				},
+			},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}, DependsOn: []string{"/baz"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+					"/baz": {Workflows: []string{"bar.yaml", "baz.yaml"}},
+				},
+			},
+		},
+		{
 			config: &config.ArianeConfig{},
 			otherConfig: &config.ArianeConfig{
 				AllowedTeams: []string{"team1"},
