@@ -317,7 +317,7 @@ func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsO
 }
 
 const commentSince = -3 * time.Hour
-const recentCutoff = -15 * time.Minute
+const recentCutoff = -3 * time.Minute
 const commentLookbackLimit = 100
 
 // processDependantWorkflows checks if the completed workflow run satisfies any trigger dependencies
