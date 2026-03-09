@@ -68,7 +68,55 @@ func TestWorkflowRunHandler_ConclusionCancelled(t *testing.T) {
 }
 
 func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
-	handler := &WorkflowRunHandler{}
+	client := github.NewClient(nil)
+	baseURL, _ := url.Parse("/")
+	client.BaseURL = baseURL
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+
+	handler := &WorkflowRunHandler{
+		ClientCreator: mockClientCreator,
+	}
+
+	payload := []byte(`{
+		"action": "completed",
+		"workflow_run": {
+			"id": 123,
+			"conclusion": "success",
+			"pull_requests": []
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 1
+		},
+		"head_repository": {
+			"fork": false
+		}
+	}`)
+
+	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	assert.NoError(t, err)
+}
+
+func TestWorkflowRunHandler_NoPullRequestsFromFork(t *testing.T) {
+	client := github.NewClient(nil)
+	baseURL, _ := url.Parse("/")
+	client.BaseURL = baseURL
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+
+	handler := &WorkflowRunHandler{
+		ClientCreator: mockClientCreator,
+	}
 
 	payload := []byte(`{
 		"action": "completed",
@@ -123,14 +171,14 @@ func TestWorkflowRunHandler_UnauthorizedPRCreator(t *testing.T) {
 			defer server.Close()
 
 			// Mock PR endpoint - PR created by unauthorized user
-			mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-				pr := &github.PullRequest{
+			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+				prs := []*github.PullRequest{{
 					Number: github.Ptr(1),
 					User: &github.User{
 						Login: github.Ptr(tc.username),
 					},
-				}
-				_ = json.NewEncoder(w).Encode(pr)
+				}}
+				_ = json.NewEncoder(w).Encode(prs)
 			})
 
 			client := github.NewClient(nil)
@@ -181,8 +229,8 @@ func TestWorkflowRunHandler_Success_NoStagesConfigured(t *testing.T) {
 	defer server.Close()
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -190,8 +238,8 @@ func TestWorkflowRunHandler_Success_NoStagesConfigured(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock labels endpoint
@@ -266,8 +314,8 @@ func TestWorkflowRunHandler_Success_PRMissingLabel(t *testing.T) {
 	defer server.Close()
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -275,8 +323,8 @@ func TestWorkflowRunHandler_Success_PRMissingLabel(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock labels endpoint - no auto-cicd label
@@ -353,8 +401,8 @@ func TestWorkflowRunHandler_Success_SuccessfulCommentPostSingleWorkflow(t *testi
 	commentPosted := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -365,8 +413,8 @@ func TestWorkflowRunHandler_Success_SuccessfulCommentPostSingleWorkflow(t *testi
 			Labels: []*github.Label{
 				{Name: github.Ptr("auto-cicd")},
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint
@@ -458,8 +506,8 @@ func TestWorkflowRunHandler_Success_SuccessfulCommentPostTwoWorkflows(t *testing
 	var listedWorkflows []string
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -470,8 +518,8 @@ func TestWorkflowRunHandler_Success_SuccessfulCommentPostTwoWorkflows(t *testing
 			Labels: []*github.Label{
 				{Name: github.Ptr("auto-cicd")},
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint with two workflows in the same stage
@@ -576,8 +624,8 @@ func TestWorkflowRunHandler_Success_FailCommentPostTwoWorkflowsOneFailed(t *test
 	var listedWorkflows []string
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -588,8 +636,8 @@ func TestWorkflowRunHandler_Success_FailCommentPostTwoWorkflowsOneFailed(t *test
 			Labels: []*github.Label{
 				{Name: github.Ptr("auto-cicd")},
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint with two workflows in the same stage
@@ -723,8 +771,8 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			var listedWorkflows []string
 
 			// Mock PR endpoint
-			mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-				pr := &github.PullRequest{
+			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+				prs := []*github.PullRequest{{
 					Number: github.Ptr(1),
 					User: &github.User{
 						Login: github.Ptr("owner-renovate[bot]"),
@@ -735,8 +783,8 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 					Labels: []*github.Label{
 						{Name: github.Ptr("auto-cicd")},
 					},
-				}
-				_ = json.NewEncoder(w).Encode(pr)
+				}}
+				_ = json.NewEncoder(w).Encode(prs)
 			})
 
 			// Mock config file endpoint with two workflows in the same stage
@@ -845,14 +893,14 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock labels endpoint - has rerun-failed:2 label
@@ -930,14 +978,14 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-release[bot]"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock labels endpoint - has rerun-failed:3 label
@@ -1035,8 +1083,8 @@ func TestWorkflowRunHandler_Failure_WorkflowNotInRerunList(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1044,8 +1092,8 @@ func TestWorkflowRunHandler_Failure_WorkflowNotInRerunList(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - has rerun config with specific workflows
@@ -1121,8 +1169,8 @@ func TestWorkflowRunHandler_Failure_WorkflowInRerunList(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1130,8 +1178,8 @@ func TestWorkflowRunHandler_Failure_WorkflowInRerunList(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - has rerun config with max-retries and specific workflows
@@ -1233,8 +1281,8 @@ func TestWorkflowRunHandler_Failure_ConfigEnforcesMaxRetries(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1242,8 +1290,8 @@ func TestWorkflowRunHandler_Failure_ConfigEnforcesMaxRetries(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - max-retries is 2
@@ -1325,8 +1373,8 @@ func TestWorkflowRunHandler_Failure_EmptyWorkflowsListAllowsAll(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1334,8 +1382,8 @@ func TestWorkflowRunHandler_Failure_EmptyWorkflowsListAllowsAll(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - empty workflows list should allow all workflows
@@ -1435,8 +1483,8 @@ func TestWorkflowRunHandler_Failure_WorkflowInExcludeList(t *testing.T) {
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1444,8 +1492,8 @@ func TestWorkflowRunHandler_Failure_WorkflowInExcludeList(t *testing.T) {
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - has exclude-workflows list
@@ -1521,8 +1569,8 @@ func TestWorkflowRunHandler_Failure_ExcludeListTakesPrecedenceOverAllowedList(t 
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1530,8 +1578,8 @@ func TestWorkflowRunHandler_Failure_ExcludeListTakesPrecedenceOverAllowedList(t 
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - workflow is in both allowed and exclude lists
@@ -1609,8 +1657,8 @@ func TestWorkflowRunHandler_Failure_WorkflowNotInExcludeListAllowsRerun(t *testi
 	rerunCalled := false
 
 	// Mock PR endpoint
-	mux.HandleFunc("/repos/owner/repo/pulls/1", func(w http.ResponseWriter, r *http.Request) {
-		pr := &github.PullRequest{
+	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		prs := []*github.PullRequest{{
 			Number: github.Ptr(1),
 			User: &github.User{
 				Login: github.Ptr("owner-renovate[bot]"),
@@ -1618,8 +1666,8 @@ func TestWorkflowRunHandler_Failure_WorkflowNotInExcludeListAllowsRerun(t *testi
 			Base: &github.PullRequestBranch{
 				Ref: github.Ptr("main"),
 			},
-		}
-		_ = json.NewEncoder(w).Encode(pr)
+		}}
+		_ = json.NewEncoder(w).Encode(prs)
 	})
 
 	// Mock config file endpoint - has exclude list but workflow is not in it
