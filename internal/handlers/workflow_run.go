@@ -43,22 +43,42 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 
 	workflowRun := event.GetWorkflowRun()
 	conclusion := workflowRun.GetConclusion()
-
-	// Get the associated pull requests
-	pullRequests := workflowRun.PullRequests
-
-	if len(pullRequests) == 0 {
-		logger.Debug().Msg("No pull requests associated with this workflow run")
+	if conclusion == "cancelled" {
+		logger.Debug().Msg("Workflow run was cancelled, skipping")
 		return nil
 	}
 
+	// Get the associated pull requests
+	pullRequestsFromWorkflowRun := workflowRun.PullRequests
+
 	client, err := w.NewInstallationClient(installationID)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create GitHub client")
 		return err
 	}
 
 	repositoryOwner := repository.GetOwner().GetLogin()
 	repositoryName := repository.GetName()
+
+	if len(pullRequestsFromWorkflowRun) == 0 && !workflowRun.GetHeadRepository().GetFork() {
+		logger.Debug().Msg("No pull requests associated with this workflow run")
+		return nil
+	}
+
+	prHead := workflowRun.GetActor().GetLogin() + ":" + workflowRun.GetHeadBranch()
+	// get PR details for all PRs associated with head branch of this workflow run
+	fullPullRequests, _, err := client.PullRequests.List(ctx, repositoryOwner, repositoryName, &github.PullRequestListOptions{
+		Head: prHead,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msgf("Failed to get PRs for head %s", prHead)
+		return err
+	}
+
+	if len(fullPullRequests) == 0 {
+		logger.Debug().Msgf("No pull requests associated with this workflow run head: %s", prHead)
+		return nil
+	}
 
 	var fullPR *github.PullRequest
 
@@ -66,18 +86,10 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 
 	// Check if PR creator matches required pattern (starts with repo owner and ends with [bot])
 	// If not, check if they are an allowed team member in the config
-	// We are getting pull request details in order to get the creator's login, which is not included in the workflow run payload.
-	for _, pr := range pullRequests {
-		prNumber := pr.GetNumber()
-		fullPR, _, err = client.PullRequests.Get(ctx, repositoryOwner, repositoryName, prNumber)
-		if err != nil {
-			logger.Error().Err(err).Msgf("Failed to get PR #%d details", prNumber)
-			continue
-		}
-
+	for _, pr := range fullPullRequests {
 		if arianeConfig == nil {
 			// Retrieve Ariane configuration from repository based on first PR
-			contextRef, _, _ := determineContextRef(fullPR, repositoryOwner, repositoryName, logger)
+			contextRef, _, _ := determineContextRef(pr, repositoryOwner, repositoryName, logger)
 
 			// retrieve Ariane configuration (triggers, etc.) from repository based on chosen context
 			arianeConfig, err = configGetArianeConfigFromRepository(client, ctx, repositoryOwner, repositoryName, contextRef)
@@ -87,16 +99,18 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 			}
 		}
 
-		prCreator := fullPR.GetUser().GetLogin()
+		prCreator := pr.GetUser().GetLogin()
 		if !strings.HasPrefix(prCreator, repositoryOwner) || !strings.HasSuffix(prCreator, "[bot]") {
-			logger.Debug().Msgf("PR #%d creator '%s' does not match required pattern (prefix: '%s', suffix: '[bot]'), checking config", prNumber, prCreator, repositoryOwner)
+			logger.Debug().Msgf("PR #%d creator '%s' does not match required pattern (prefix: '%s', suffix: '[bot]'), checking config", pr.GetNumber(), prCreator, repositoryOwner)
 
 			if !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, prCreator, logger) {
-				logger.Debug().Msgf("PR #%d creator '%s' is not an allowed team member, skipping", prNumber, prCreator)
-				fullPR = nil
+				logger.Debug().Msgf("PR #%d creator '%s' is not an allowed team member, skipping", pr.GetNumber(), prCreator)
 				continue
 			}
 		}
+		// found a PR with an allowed creator, we can proceed with handling this workflow run
+		fullPR = pr
+		break
 	}
 
 	if fullPR == nil {
