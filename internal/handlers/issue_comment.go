@@ -161,8 +161,23 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 
 	err = processor.processWorkflowsForTrigger(ctx, submatch, prNumber, contextRef, headSHA, baseSHA, workflowsToTrigger, dependsOn, commenter)
 	if err != nil {
-		comment := fmt.Sprintf("Failed to process workflows for trigger: %v", err)
-		logger.Error().Err(err).Msg(comment)
+		var comment string
+		err, ok := err.(TriggerSkippedDependencyInProgressError)
+		if ok {
+			comment = err.Error()
+			logger.Debug().Err(err).Msg(comment)
+			commentErr := commenter.reactToComment(ctx, commentID, "+1")
+			if commentErr == nil {
+				logger.Error().Err(err).Msg("Failed to react to comment with thumbs up emoji")
+			}
+		} else {
+			comment = fmt.Sprintf("Failed to process workflows for trigger: %v", err)
+			logger.Error().Err(err).Msg(comment)
+			commentErr := commenter.reactToComment(ctx, commentID, "confused")
+			if commentErr == nil {
+				logger.Error().Err(err).Msg("Failed to react to comment with confused emoji")
+			}
+		}
 		if arianeConfig.GetVerbose() {
 			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
 		}

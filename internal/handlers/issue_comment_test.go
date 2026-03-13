@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -971,7 +972,7 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
-	server := setMockServerWithFeedbackConfig(false, false)
+	server := setMockServerWithFeedbackConfig(false, false, &[]string{}, false, false)
 	defer server.Close()
 
 	client := github.NewClient(nil)
@@ -1027,7 +1028,7 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
-	server := setMockServerWithFeedbackConfig(true, false)
+	server := setMockServerWithFeedbackConfig(true, false, &[]string{}, false, false)
 	defer server.Close()
 
 	client := github.NewClient(nil)
@@ -1082,7 +1083,8 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
-	server := setMockServerWithFeedbackConfig(true, true)
+	reactions := make([]string, 0, 10)
+	server := setMockServerWithFeedbackConfig(true, true, &reactions, false, false)
 	defer server.Close()
 
 	client := github.NewClient(nil)
@@ -1126,6 +1128,8 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 
 	err := handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.NoError(t, err)
+
+	assert.EqualValues(t, []string{"eyes", "rocket"}, reactions)
 }
 
 func TestHandle_WorkflowsReportDisabled(t *testing.T) {
@@ -1137,7 +1141,7 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 
-	server := setMockServerWithFeedbackConfig(true, false)
+	server := setMockServerWithFeedbackConfig(true, false, &[]string{}, false, false)
 	defer server.Close()
 
 	client := github.NewClient(nil)
@@ -1183,7 +1187,111 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool) *httptest.Server {
+func TestHandle_WorkflowsDependencyRunningReaction(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+
+	reactions := make([]string, 0, 10)
+	server := setMockServerWithFeedbackConfig(false, false, &reactions, true, true)
+	defer server.Close()
+
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {},
+			"number": 0
+		},
+		"action": "created",
+		"comment": {
+			"id": 1,
+			"body": "/test",
+			"user": {
+				"login": "user"
+			}
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 0
+		}
+	}`)
+
+	var event github.IssueCommentEvent
+	_ = json.Unmarshal(payload, &event)
+
+	ctx := context.Background()
+
+	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	assert.Error(t, err)
+	assert.EqualValues(t, []string{"eyes", "+1"}, reactions)
+}
+
+func TestHandle_WorkflowsDependencyFailedReaction(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+
+	reactions := make([]string, 0, 10)
+	server := setMockServerWithFeedbackConfig(false, false, &reactions, true, false)
+	defer server.Close()
+
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PRCommentHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+		"issue": {
+			"pull_request": {},
+			"number": 0
+		},
+		"action": "created",
+		"comment": {
+			"id": 1,
+			"body": "/test",
+			"user": {
+				"login": "user"
+			}
+		},
+		"repository": {
+			"owner": {
+				"login": "owner"
+			},
+			"name": "repo"
+		},
+		"installation": {
+			"id": 0
+		}
+	}`)
+
+	var event github.IssueCommentEvent
+	_ = json.Unmarshal(payload, &event)
+
+	ctx := context.Background()
+
+	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	assert.Error(t, err)
+	assert.EqualValues(t, []string{"eyes", "confused"}, reactions)
+}
+
+func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool, reactions *[]string, dependencyTest bool, dependencyRunning bool) *httptest.Server {
 	mux := http.NewServeMux()
 
 	// Mock individual PR endpoint
@@ -1216,9 +1324,56 @@ func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool) *httpte
 		_ = json.NewEncoder(w).Encode([]*github.PullRequest{&pr})
 	})
 
-	// Mock config file endpoint with feedback settings
-	mux.HandleFunc("/repos/owner/repo/contents/.github/ariane-config.yaml", func(w http.ResponseWriter, r *http.Request) {
-		configContent := fmt.Sprintf(`feedback:
+	if dependencyTest {
+		// Mock config file endpoint with feedback settings
+		mux.HandleFunc("/repos/owner/repo/contents/.github/ariane-config.yaml", func(w http.ResponseWriter, r *http.Request) {
+			configContent := `
+triggers:
+  /test:
+    workflows:
+    - foo.yaml
+    depends-on:
+    - /dependency
+  /dependency:
+    workflows:
+    - bar.yaml
+workflows:
+  foo.yaml:
+    paths-regex: ".*"
+`
+
+			content := github.RepositoryContent{
+				Content:  github.Ptr(configContent),
+				Encoding: github.Ptr(""),
+			}
+			_ = json.NewEncoder(w).Encode(&content)
+		})
+		mux.HandleFunc("/repos/owner/repo/actions/workflows/bar.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
+			var conclusion string
+			var status string
+			if dependencyRunning {
+				status = "in_progress"
+				conclusion = ""
+			} else {
+				status = "completed"
+				conclusion = "failure"
+			}
+			workflowRuns := github.WorkflowRuns{
+				WorkflowRuns: []*github.WorkflowRun{
+					{
+						ID:         github.Ptr(int64(2)),
+						Status:     github.Ptr(status),
+						Conclusion: github.Ptr(conclusion),
+					},
+				},
+				TotalCount: github.Ptr(1),
+			}
+			_ = json.NewEncoder(w).Encode(&workflowRuns)
+		})
+	} else {
+		// Mock config file endpoint with feedback settings
+		mux.HandleFunc("/repos/owner/repo/contents/.github/ariane-config.yaml", func(w http.ResponseWriter, r *http.Request) {
+			configContent := fmt.Sprintf(`feedback:
   verbose: %t
   workflows-report: %t
 triggers:
@@ -1230,12 +1385,13 @@ workflows:
     paths-regex: ".*"
 `, verbose, workflowsReport)
 
-		content := github.RepositoryContent{
-			Content:  github.Ptr(configContent),
-			Encoding: github.Ptr(""),
-		}
-		_ = json.NewEncoder(w).Encode(&content)
-	})
+			content := github.RepositoryContent{
+				Content:  github.Ptr(configContent),
+				Encoding: github.Ptr(""),
+			}
+			_ = json.NewEncoder(w).Encode(&content)
+		})
+	}
 
 	// Mock PR files endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls/0/files", func(w http.ResponseWriter, r *http.Request) {
@@ -1277,6 +1433,16 @@ workflows:
 
 	// Mock reactions endpoint
 	mux.HandleFunc("/repos/owner/repo/issues/comments/1/reactions", func(w http.ResponseWriter, r *http.Request) {
+		bytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "setMockServerWithFeedbackConfig: could not read request body", http.StatusInternalServerError)
+			return
+		}
+
+		incomingReaction := github.Reaction{}
+		_ = json.Unmarshal(bytes, &incomingReaction)
+		*reactions = append(*reactions, incomingReaction.GetContent())
+
 		reaction := github.Reaction{
 			ID: github.Ptr(int64(1)),
 		}
