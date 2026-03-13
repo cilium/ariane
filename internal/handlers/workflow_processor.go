@@ -213,6 +213,12 @@ func (w *WorkflowProcessor) getPRFiles(ctx context.Context, prNumber int) ([]*gi
 	return files, nil
 }
 
+type TriggerSkippedDependencyInProgressError string
+
+func (e TriggerSkippedDependencyInProgressError) Error() string {
+	return string(e)
+}
+
 func (w *WorkflowProcessor) processWorkflowsForTrigger(ctx context.Context, submatch []string, prNumber int, contextRef, headSHA, baseSHA string, workflowsToTrigger, dependsOn []string, commenter *GithubCommenter) error {
 	w.logger.Debug().Msgf("Found trigger phrase: %q", submatch)
 
@@ -227,11 +233,14 @@ func (w *WorkflowProcessor) processWorkflowsForTrigger(ctx context.Context, subm
 			if !canProceed {
 				var comment string
 				if inProgress {
-					comment = fmt.Sprintf("Skipping trigger: dependency %q is still in progress", dep)
+					comment = fmt.Sprintf("Skipping trigger: dependency %q is still in progress. Trigger will be retriggered after dependency completes.", dep)
+					w.logger.Info().Msg(comment)
+					err := TriggerSkippedDependencyInProgressError(comment)
+					return err
 				} else {
 					comment = fmt.Sprintf("Skipping trigger: dependency %q has not completed successfully", dep)
+					w.logger.Info().Msg(comment)
 				}
-				w.logger.Info().Msg(comment)
 
 				return errors.New(comment)
 			}
