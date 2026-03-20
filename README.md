@@ -2,6 +2,15 @@
 
 GitHub App for triggering workflows based on trigger phrases found in PR comments, and marking desired workflows successful in merge groups, to be used for Cilium CI.
 
+## There are emojis under my comment!? What does it mean?
+
+- 👀: processing has started, associated workflows and their dependencies will be checked and then triggered.
+- 👍: dependencies are currently running, associated workflows will be triggered automatically afterwards.
+- 😕: dependencies check failed, usually this means you need to trigger them manually with another trigger phrase. Associated workflows will be triggered afterwards.
+- 🚀: associated workflows were triggered.
+
+If there are no emojis under your comment, or there is only 👀, it might mean that Ariane functions are disrupted. Please report on Slack if that happens to you.
+
 ## How does it work
 
 ### Issue Comments
