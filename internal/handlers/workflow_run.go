@@ -76,8 +76,21 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 	}
 
 	if len(fullPullRequests) == 0 {
-		logger.Debug().Msgf("No pull requests associated with this workflow run head: %s", prHead)
-		return nil
+		// No pull requests associated with workflow run head, but we know that there are pull requests associated with this workflow run, so we need to retrieve them individually by their IDs
+		// This can happen if a bot account is creating PRs, the actor in the workflow run event doesn't match the PR author in these cases
+		logger.Debug().Msgf("No pull requests associated with this workflow run head: %s, retrieving individual prs by ids", prHead)
+		for _, pr := range pullRequestsFromWorkflowRun {
+			fullPR, _, err := client.PullRequests.Get(ctx, repositoryOwner, repositoryName, pr.GetNumber())
+			if err != nil {
+				logger.Error().Err(err).Msgf("Failed to get PR #%d details", pr.GetNumber())
+				continue
+			}
+			fullPullRequests = append(fullPullRequests, fullPR)
+		}
+		if len(fullPullRequests) == 0 {
+			logger.Debug().Msgf("No pull requests could be retrieved for this workflow run")
+			return nil
+		}
 	}
 
 	var fullPR *github.PullRequest
