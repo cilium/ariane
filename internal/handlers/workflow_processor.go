@@ -311,7 +311,7 @@ func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsO
 
 		// Conclusion must be success or skipped
 		if conclusion != "success" && conclusion != "skipped" {
-			inProgress = status == "in_progress"
+			inProgress = status == "in_progress" || status == "queued"
 			if inProgress {
 				w.logger.Debug().Msgf("Dependency workflow %s is still in progress (conclusion: %s)", workflow, conclusion)
 			} else {
