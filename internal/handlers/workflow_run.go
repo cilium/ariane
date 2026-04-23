@@ -88,8 +88,36 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 			fullPullRequests = append(fullPullRequests, fullPR)
 		}
 		if len(fullPullRequests) == 0 {
-			logger.Debug().Msgf("No pull requests could be retrieved for this workflow run")
-			return nil
+			logger.Debug().Msg("Individual pull requests data could not be retrieved, trying to filter recent PRs by branch")
+			nextPage := 0
+		pages:
+			for {
+				possiblePRs, response, err := client.PullRequests.List(ctx, repositoryOwner, repositoryName, &github.PullRequestListOptions{
+					Direction: "desc",
+					ListOptions: github.ListOptions{
+						PerPage: 100,
+						Page:    nextPage,
+					},
+				})
+				if err != nil {
+					logger.Error().Err(err).Msg("Failed to list possible PRs")
+					return err
+				}
+				for _, pr := range possiblePRs {
+					if pr.GetHead().GetRef() == workflowRun.GetHeadBranch() {
+						fullPullRequests = append(fullPullRequests, pr)
+						break pages
+					}
+				}
+				if response.NextPage == 0 {
+					break pages
+				}
+				nextPage = response.NextPage
+			}
+			if len(fullPullRequests) == 0 {
+				logger.Debug().Msgf("No pull requests could be retrieved for this workflow run")
+				return nil
+			}
 		}
 	}
 
