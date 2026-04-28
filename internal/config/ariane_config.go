@@ -166,6 +166,11 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 		return false
 	}
 
+	// If the workflow is a dependency, it should run if any of it's dependant workflows should also run
+	if config.IsDependencyOfRunnableWorkflow(ctx, workflow, files) {
+		return true
+	}
+
 	// PathsRegex and PathsIgnoreRegex are both defined - this is UNSUPPORTED!!
 	// default to run the workflow no matter what
 	if workflowConfig.PathsRegex != "" && workflowConfig.PathsIgnoreRegex != "" {
@@ -287,4 +292,37 @@ func (config *ArianeConfig) Merge(other *ArianeConfig) *ArianeConfig {
 	}
 
 	return config
+}
+
+func (config *ArianeConfig) IsDependencyOfRunnableWorkflow(ctx context.Context, workflow string, files []*github.CommitFile) bool {
+
+	var triggersContainingWorkflow []string
+	for triggerName, trigger := range config.Triggers {
+		for _, w := range trigger.Workflows {
+			if w == workflow {
+				triggersContainingWorkflow = append(triggersContainingWorkflow, triggerName)
+			}
+		}
+	}
+
+	if len(triggersContainingWorkflow) == 0 {
+		return false //workflow is not in any trigger
+	}
+
+	for _, trigger := range config.Triggers {
+		for _, dependency := range trigger.DependsOn {
+			for _, triggerWithOGWorkflow := range triggersContainingWorkflow {
+				if dependency == triggerWithOGWorkflow {
+					// original workflow is a dependency of this trigger, check if any workflow from this trigger should run
+					for _, dependentWorkflow := range trigger.Workflows {
+						if config.ShouldRunWorkflow(ctx, dependentWorkflow, files) {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false
 }
