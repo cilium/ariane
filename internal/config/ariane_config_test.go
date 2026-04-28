@@ -358,7 +358,8 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 		Triggers: map[string]config.TriggerConfig{
 			"/foo":            {Workflows: []string{"foo.yaml"}},
 			"/bar":            {Workflows: []string{"bar.yaml"}},
-			"/enterprise-foo": {Workflows: []string{"enterprise-foo.yaml"}},
+			"/enterprise-foo": {Workflows: []string{"enterprise-foo.yaml"}, DependsOn: []string{"/dependency"}},
+			"/dependency":     {Workflows: []string{"dependency.yaml"}},
 		},
 		Workflows: map[string]config.WorkflowPathsRegexConfig{
 			"bar.yaml": {
@@ -372,6 +373,7 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 				PathsRegex:       "(x|y)/",
 				PathsIgnoreRegex: "(test|Documentation|myproject)/",
 			},
+			"dependency.yaml": {},
 		},
 		AllowedTeams: []string{
 			"team1",
@@ -472,6 +474,24 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 			FilenamesJson:  []byte(`[]`),
 			ExpectedResult: false,
 			ExpectedReason: "no changes exist, despite both paths-regex and paths-ignore-regex being defined - the workflow will not run",
+		},
+		{
+			Workflow:       "dependency.yaml",
+			FilenamesJson:  []byte(`[]`),
+			ExpectedResult: false,
+			ExpectedReason: "no changes exist",
+		},
+		{
+			Workflow:       "dependency.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}]`),
+			ExpectedResult: false,
+			ExpectedReason: "no changes for either dependency or dependant workflow",
+		},
+		{
+			Workflow:       "dependency.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/enterprise-foo.yaml"}]`),
+			ExpectedResult: true,
+			ExpectedReason: "Dependant workflow changed - dependency should be run",
 		},
 	}
 
