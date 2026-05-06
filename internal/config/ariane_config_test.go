@@ -277,89 +277,15 @@ func TestArianeConfigMerge(t *testing.T) {
 	}
 }
 
-func Test_ShouldRunOnlyWorkflows(t *testing.T) {
-	config := &config.ArianeConfig{
-		Triggers: map[string]config.TriggerConfig{
-			"/foo":            {Workflows: []string{"foo.yaml"}},
-			"/bar":            {Workflows: []string{"bar.yaml"}},
-			"/enterprise-foo": {Workflows: []string{"enterprise-foo.yaml"}},
-		},
-		Workflows: map[string]config.WorkflowPathsRegexConfig{},
-		AllowedTeams: []string{
-			"team1",
-			"team2",
-		},
-	}
-
-	testCases := []struct {
-		Workflow       string
-		FilenamesJson  []byte
-		ExpectedResult bool
-		ExpectedReason string
-	}{
-		{
-			Workflow:       "foo.yaml",
-			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}, {"filename": "test/testdata.json"}, {"filename": "nocode/Documentation/operations-guide.rst"}]`),
-			ExpectedResult: true,
-			ExpectedReason: "changes exist on the \"workflow\" var (foo.yaml) under .github/workflows/",
-		},
-		{
-			Workflow:       "foo.yaml",
-			FilenamesJson:  []byte(`[{"filename": ".github/workflows/bar.yaml"}, {"filename": "test/testdata.json"}, {"filename": "nocode/Documentation/operations-guide.rst"}]`),
-			ExpectedResult: true,
-			ExpectedReason: "a workflow was changed, however not foo.yaml - Nevertheless, non-workflow files were updated, hence foo.yaml needs to run",
-		},
-		{
-			Workflow:       "foo.yaml",
-			FilenamesJson:  []byte(`[{"filename": "test/testdata.json"}, {"filename": "nocode/Documentation/operations-guide.rst"}]`),
-			ExpectedResult: true,
-			ExpectedReason: "No workflows were updated - however, there are other files changed, hence the foo.yaml workflow needs to runs",
-		},
-		{
-			Workflow:       "foo.yaml",
-			FilenamesJson:  []byte(`[{"filename": "test/testdata.json"}, {"filename": "Documentation/operations-guide.rst"}]`),
-			ExpectedResult: true,
-			ExpectedReason: "No workflows were updated, and no regexps exist - there are other files changed, hence the foo.yaml workflow needs to runs",
-		},
-		{
-			Workflow:       "foo.yaml",
-			FilenamesJson:  []byte(`[]`),
-			ExpectedResult: false,
-			ExpectedReason: "No changes committed, hence nothing new to test",
-		},
-		{
-			Workflow:       "bar.yaml",
-			FilenamesJson:  []byte(`[{"filename": "test/testdata.json"}, {"filename": "x/lib3/handlers/handler.go"}]`),
-			ExpectedResult: true,
-			ExpectedReason: "No workflows were updated, and no regexps exist - there are other files changed, hence the foo.yaml workflow needs to runs.",
-		},
-		{
-			Workflow:       "enterprise-foo.yaml",
-			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}, {"filename": ".github/workflows/config/set-env"}]`),
-			ExpectedResult: false,
-			ExpectedReason: "Only workflows were changed, but not the enterprise-foo.yaml one. No need to run the workflow.",
-		},
-	}
-
-	for idx, testCase := range testCases {
-		files := []*github.CommitFile{}
-		if err := json.Unmarshal(testCase.FilenamesJson, &files); err != nil {
-			t.Errorf("[TEST%v] ShouldRunOnlyWorkflow failed.\nCould not unmarshal the mocked json data.", idx+1)
-		}
-		result := config.ShouldRunOnlyWorkflows(context.Background(), testCase.Workflow, files)
-		if result != testCase.ExpectedResult {
-			t.Errorf("[TEST%v] ShouldRunOnlyWorkflows failed.\nfiles: %v;\nExpected reason to pass the test: %v", idx+1, files, testCase.ExpectedReason)
-		}
-	}
-}
-
 func Test_ShouldRunWorkflow(t *testing.T) {
 	config := &config.ArianeConfig{
 		Triggers: map[string]config.TriggerConfig{
-			"/foo":            {Workflows: []string{"foo.yaml"}},
-			"/bar":            {Workflows: []string{"bar.yaml"}},
-			"/enterprise-foo": {Workflows: []string{"enterprise-foo.yaml"}, DependsOn: []string{"/dependency"}},
-			"/dependency":     {Workflows: []string{"dependency.yaml"}},
+			"/foo":                           {Workflows: []string{"foo.yaml"}},
+			"/bar":                           {Workflows: []string{"bar.yaml"}},
+			"/enterprise-foo":                {Workflows: []string{"enterprise-foo.yaml"}, DependsOn: []string{"/dependency"}},
+			"/dependency":                    {Workflows: []string{"dependency.yaml"}},
+			"/no-workflow-config":            {Workflows: []string{"no-workflow-config.yaml"}, DependsOn: []string{"/no-workflow-config-dependency"}},
+			"/no-workflow-config-dependency": {Workflows: []string{"no-workflow-config-dependency.yaml"}},
 		},
 		Workflows: map[string]config.WorkflowPathsRegexConfig{
 			"bar.yaml": {
@@ -492,6 +418,36 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 			FilenamesJson:  []byte(`[{"filename": ".github/workflows/enterprise-foo.yaml"}]`),
 			ExpectedResult: true,
 			ExpectedReason: "Dependant workflow changed - dependency should be run",
+		},
+		{
+			Workflow:       "no-workflow-config.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}]`),
+			ExpectedResult: false,
+			ExpectedReason: "Workflow not changed, not running",
+		},
+		{
+			Workflow:       "no-workflow-config.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/no-workflow-config.yaml"}]`),
+			ExpectedResult: true,
+			ExpectedReason: "Workflow changed, running",
+		},
+		{
+			Workflow:       "no-workflow-config-dependency.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/no-workflow-config.yaml"}]`),
+			ExpectedResult: true,
+			ExpectedReason: "Dependant workflow changed, running",
+		},
+		{
+			Workflow:       "no-workflow-config-dependency.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}]`),
+			ExpectedResult: false,
+			ExpectedReason: "Dependant workflow not changed, running",
+		},
+		{
+			Workflow:       "no-workflow-config.yaml",
+			FilenamesJson:  []byte(`[{"filename": "main.go"}]`),
+			ExpectedResult: true,
+			ExpectedReason: "Non-workflow files changed, running",
 		},
 	}
 
