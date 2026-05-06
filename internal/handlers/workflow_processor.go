@@ -98,12 +98,7 @@ func (w *WorkflowProcessor) shouldSkipWorkflow(ctx context.Context, workflow, SH
 }
 
 func (w *WorkflowProcessor) shouldRunWorkflow(ctx context.Context, workflow string, files []*github.CommitFile) bool {
-	if _, ok := w.arianeConfig.Workflows[workflow]; ok {
-		return w.arianeConfig.ShouldRunWorkflow(ctx, workflow, files)
-	}
-	// Runs this if the "workflows" section in ariane-config.yaml
-	// does not contain the worfklow (e.g. foo.yaml)
-	return w.arianeConfig.ShouldRunOnlyWorkflows(ctx, workflow, files)
+	return w.arianeConfig.ShouldRunWorkflow(ctx, workflow, files)
 }
 
 func (w *WorkflowProcessor) triggerWorkflow(ctx context.Context, workflow string, event github.CreateWorkflowDispatchEventRequest) error {

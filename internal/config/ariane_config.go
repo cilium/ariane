@@ -132,20 +132,17 @@ func (c *ArianeConfig) GetReportAllWorkflows() bool {
 	return *c.Feedback.ReportAllWorkflows
 }
 
-// ShouldRunOnlyWorkflows checks given changed files against .github/workflow pattern
-// Return false if only workflow files changed and the current workflow file is not changed
-// Return true otherwise
-func (config *ArianeConfig) ShouldRunOnlyWorkflows(ctx context.Context, workflow string, files []*github.CommitFile) bool {
-	// Skip the workflow if the committed changes are only for
-	// .github/workflows/* and they do not affect the given workflow
+// ChangeAffectsWorkflow returns true if file list indicates that `workflow` should be run
+func (config *ArianeConfig) ChangeAffectsWorkflow(ctx context.Context, workflow string, files []*github.CommitFile) bool {
+
 	for _, file := range files {
 		filename := file.GetFilename()
 		if !strings.HasPrefix(filename, ".github/workflows") || filename == `.github/workflows/`+workflow {
 			return true
 		}
-
 	}
-	return false
+	// If the workflow is a dependency, it should run if any of it's dependant workflows should also run
+	return config.IsDependencyOfRunnableWorkflow(ctx, workflow, files)
 }
 
 // ShouldRunWorkflow compares given list of files against a workflow's PathsRegex / PathsIgnoreRegex and workflow's filename.
@@ -163,7 +160,7 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 	// 	- /command is expected to trigger one or more workflows
 	//	- these workflows are expected to be defined under the "workflows:" section
 	if !exists {
-		return false
+		return config.ChangeAffectsWorkflow(ctx, workflow, files)
 	}
 
 	// If the workflow is a dependency, it should run if any of it's dependant workflows should also run
