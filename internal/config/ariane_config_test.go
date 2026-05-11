@@ -269,6 +269,53 @@ func TestArianeConfigMerge(t *testing.T) {
 				},
 			},
 		},
+		{
+			config: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}, DependsOn: []string{"/bar"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+			otherConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/baz": {Workflows: []string{"bar.yaml", "baz.yaml"}},
+				},
+				ReplaceDependsOn: map[string][]string{
+					"/bar": []string{"/trolo"},
+				},
+			},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}, DependsOn: []string{"/trolo"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+					"/baz": {Workflows: []string{"bar.yaml", "baz.yaml"}},
+				},
+			},
+		},
+		{
+			config: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml"}, DependsOn: []string{"/bar"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+				},
+			},
+			otherConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"enterprise-foo.yaml"}, DependsOn: []string{"/baz"}},
+					"/baz": {Workflows: []string{"bar.yaml", "baz.yaml"}},
+				},
+				ReplaceDependsOn: map[string][]string{
+					"/bar": []string{"/trolo"},
+				},
+			},
+			mergedConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"/foo": {Workflows: []string{"foo.yaml", "enterprise-foo.yaml"}, DependsOn: []string{"/baz"}},
+					"/bar": {Workflows: []string{"bar.yaml"}},
+					"/baz": {Workflows: []string{"bar.yaml", "baz.yaml"}},
+				},
+			},
+		},
 	}
 	for _, tt := range cases {
 		mergedConfig := tt.config.Merge(tt.otherConfig)

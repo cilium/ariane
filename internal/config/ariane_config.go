@@ -21,12 +21,13 @@ const (
 )
 
 type ArianeConfig struct {
-	Feedback     FeedbackConfig                      `yaml:"feedback,omitempty"`
-	Triggers     map[string]TriggerConfig            `yaml:"triggers"`
-	Workflows    map[string]WorkflowPathsRegexConfig `yaml:"workflows"`
-	AllowedTeams []string                            `yaml:"allowed-teams,omitempty"`
-	RerunConfig  *RerunConfig                        `yaml:"rerun,omitempty"`
-	StagesConfig *StagesConfig                       `yaml:"stages-config,omitempty"`
+	Feedback         FeedbackConfig                      `yaml:"feedback,omitempty"`
+	Triggers         map[string]TriggerConfig            `yaml:"triggers"`
+	Workflows        map[string]WorkflowPathsRegexConfig `yaml:"workflows"`
+	AllowedTeams     []string                            `yaml:"allowed-teams,omitempty"`
+	RerunConfig      *RerunConfig                        `yaml:"rerun,omitempty"`
+	StagesConfig     *StagesConfig                       `yaml:"stages-config,omitempty"`
+	ReplaceDependsOn map[string][]string                 `yaml:"replace-depends-on,omitempty"`
 }
 
 // FeedbackConfig contains configuration for feedback by ariane bot to the PR in the form of comments
@@ -243,6 +244,26 @@ func (config *ArianeConfig) Merge(other *ArianeConfig) *ArianeConfig {
 	if config.Triggers == nil && len(other.Triggers) > 0 {
 		config.Triggers = make(map[string]TriggerConfig)
 	}
+
+	// replace-depends-on is a special case where we want to replace the dependencies of a trigger with an explicit
+	// declaration of new dependencies (useful if we don't want to reconfigure the trigger in the second file,
+	// but we want to alter dependencies)
+	for k, v := range config.Triggers {
+		var newDependsOnList []string
+		for _, dep := range v.DependsOn {
+			if newDependsOn, ok := other.ReplaceDependsOn[dep]; ok {
+				newDependsOnList = append(newDependsOnList, newDependsOn...)
+			} else {
+				newDependsOnList = append(newDependsOnList, dep)
+			}
+		}
+		if len(newDependsOnList) > 0 {
+			v.DependsOn = newDependsOnList
+			config.Triggers[k] = v
+		}
+	}
+
+	// merge triggers (except the depends-on values for triggers that exist in both config files)
 	for k, v := range other.Triggers {
 		// Append enterprise-only workflows to existing OSS ones instead of replacing them.
 		if trigger, ok := config.Triggers[k]; ok {
