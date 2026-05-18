@@ -73,13 +73,14 @@ func parseAndValidate(path string) (*config.ArianeConfig, error) {
 		return nil, fmt.Errorf("failed to parse YAML as map: %w", err)
 	}
 	knownTopLevel := map[string]bool{
-		"feedback":      true,
-		"triggers":      true,
-		"workflows":     true,
-		"allowed-teams": true,
-		"rerun":         true,
-		"stages-config": true,
-		"schedule":      true,
+		"feedback":           true,
+		"triggers":           true,
+		"workflows":          true,
+		"allowed-teams":      true,
+		"rerun":              true,
+		"stages-config":      true,
+		"schedule":           true,
+		"replace-depends-on": true,
 	}
 	for key := range raw {
 		if !knownTopLevel[key] {
