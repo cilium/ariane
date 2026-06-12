@@ -16,11 +16,11 @@ package githubapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
-	"github.com/google/go-github/v83/github"
-	"github.com/pkg/errors"
+	"github.com/google/go-github/v88/github"
 	"github.com/rcrowley/go-metrics"
 	"github.com/rs/zerolog"
 )
