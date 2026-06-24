@@ -1,6 +1,6 @@
 ARG REPO=github.com/cilium/ariane
 
-FROM golang:1.25@sha256:4a2f22aa4a8f4779956bca7a6b7a84b41813e564d9dcf5a57ec3d582ffc20e13 AS builder
+FROM golang:1.25@sha256:aa8f780bf83ca544dfa1b677f8c76e8e0765979c0a8f5add065c3475e722e2fb AS builder
 ARG REPO
 WORKDIR /go/src/${REPO}/
 COPY . .
