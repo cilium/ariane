@@ -16,10 +16,10 @@ package githubapp
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/rcrowley/go-metrics"
 	"github.com/rs/zerolog"
 )
@@ -212,7 +212,7 @@ func QueueAsyncScheduler(queueSize int, workers int, opts ...SchedulerOption) Sc
 		opt(&s.scheduler)
 	}
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			for d := range s.queue {
 				if s.eventAge != nil {
