@@ -681,6 +681,33 @@ func setMockServer() *httptest.Server {
 			http.Error(w, "setMockServer: could not encode the check run payload in JSON for the HTTP response.", http.StatusInternalServerError)
 		}
 	})
+	mux.HandleFunc("/repos/owner/repo/contents/.github/workflows/skipped.yaml", func(w http.ResponseWriter, r *http.Request) {
+		fileContent := `
+name: skipped
+someOtherKey: someOtherValue
+`
+		content := github.RepositoryContent{
+			Content: &fileContent,
+		}
+		if err := json.NewEncoder(w).Encode(content); err != nil {
+			http.Error(w, "setMockServer: could not encode the PRs payload in JSON for the HTTP response.", http.StatusInternalServerError)
+		}
+	})
+
+	mux.HandleFunc("/repos/owner/repo/commits/mock-sha/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		result := github.ListCheckRunsResults{
+			Total: github.Ptr(1),
+			CheckRuns: []*github.CheckRun{
+				{
+					Status:     github.Ptr("completed"),
+					Conclusion: github.Ptr("skipped"),
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			http.Error(w, "setMockServer: could not encode the PRs payload in JSON for the HTTP response.", http.StatusInternalServerError)
+		}
+	})
 	return httptest.NewServer(mux)
 }
 
