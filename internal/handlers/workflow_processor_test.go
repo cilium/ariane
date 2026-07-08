@@ -102,6 +102,17 @@ func Test_checkTriggerDependency(t *testing.T) {
 			ExpectedResult: false,
 			ExpectedReason: "Dependency still in progress",
 		},
+		{
+			ArianeConfig: &config.ArianeConfig{
+				Triggers: map[string]config.TriggerConfig{
+					"trigger": {
+						Workflows: []string{"skipped.yaml"},
+					},
+				},
+			},
+			ExpectedResult: true,
+			ExpectedReason: "Dependency skipped",
+		},
 	}
 	for i, testCase := range testCases {
 		processor := WorkflowProcessor{

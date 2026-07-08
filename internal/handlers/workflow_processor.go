@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/ariane/internal/config"
 	"github.com/google/go-github/v83/github"
 	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v3"
 )
 
 type WorkflowProcessor struct {
@@ -291,16 +292,25 @@ func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsO
 			return false, false, fmt.Errorf("failed to list workflow runs for %s: %w", workflow, err)
 		}
 
+		var status string
+		var conclusion string
 		if runs.GetTotalCount() == 0 {
 			// No runs found for this workflow - dependency not satisfied
 			w.logger.Debug().Msgf("No runs found for dependency workflow %s", workflow)
-			return false, false, nil
-		}
 
-		// Check if the latest run has completed successfully or been skipped
-		latestRun := runs.WorkflowRuns[0]
-		status := latestRun.GetStatus()
-		conclusion := latestRun.GetConclusion()
+			check, err := w.getWorkflowCheck(ctx, workflow, sha)
+			if err != nil {
+				return false, false, err
+			}
+
+			status = check.GetStatus()
+			conclusion = check.GetConclusion()
+		} else {
+			// Check if the latest run has completed successfully or been skipped
+			latestRun := runs.WorkflowRuns[0]
+			status = latestRun.GetStatus()
+			conclusion = latestRun.GetConclusion()
+		}
 
 		w.logger.Debug().Msgf("Dependency workflow %s: status=%s, conclusion=%s", workflow, status, conclusion)
 
@@ -318,6 +328,42 @@ func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsO
 
 	// All dependency workflows have completed successfully or been skipped
 	return true, false, nil
+}
+
+type namedWorkflow struct {
+	Name string `yaml:"name"`
+}
+
+func (w *WorkflowProcessor) getWorkflowCheck(ctx context.Context, workflow, sha string) (*github.CheckRun, error) {
+	content, _, _, err := w.client.Repositories.GetContents(ctx, w.owner, w.repo, ".github/workflows/"+workflow, &github.RepositoryContentGetOptions{Ref: sha})
+	if err != nil {
+		return nil, err
+	}
+
+	fileContent, err := content.GetContent()
+	if err != nil {
+		return nil, err
+	}
+
+	nameSource := namedWorkflow{}
+	err = yaml.Unmarshal([]byte(fileContent), &nameSource)
+	if err != nil {
+		return nil, err
+	}
+
+	if nameSource.Name == "" {
+		return nil, fmt.Errorf("workflow %s doesn't have a name", workflow)
+	}
+
+	checks, _, err := w.client.Checks.ListCheckRunsForRef(ctx, w.owner, w.repo, sha, &github.ListCheckRunsOptions{CheckName: &nameSource.Name})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(checks.CheckRuns) > 0 {
+		return checks.CheckRuns[0], nil
+	}
+	return nil, fmt.Errorf("no %s checks found for workflow %s", nameSource.Name, workflow)
 }
 
 const commentSince = -3 * time.Hour
