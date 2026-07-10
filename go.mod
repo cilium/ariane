@@ -3,7 +3,7 @@ module github.com/cilium/ariane
 go 1.26.0
 
 require (
-	github.com/google/go-github/v83 v83.0.0
+	github.com/google/go-github/v88 v88.0.0
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
 	github.com/hmdsefi/gograph v0.7.0
 	github.com/palantir/go-githubapp v0.45.0
@@ -22,7 +22,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/google/go-github/v84 v84.0.0 // indirect
-	github.com/google/go-github/v88 v88.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
