@@ -6,7 +6,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 )
 

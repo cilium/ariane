@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/cilium/ariane/internal/config"
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 )
 
