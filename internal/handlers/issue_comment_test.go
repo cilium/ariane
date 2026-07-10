@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -21,7 +20,7 @@ import (
 	reflect "reflect"
 
 	"github.com/cilium/ariane/internal/config"
-	github "github.com/google/go-github/v83/github"
+	github "github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 	githubv4 "github.com/shurcooL/githubv4"
 	gomock "go.uber.org/mock/gomock"
@@ -107,8 +106,11 @@ func TestHandle_ActionNotCreated(t *testing.T) {
 func TestHandle_IsInvalidBot(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -140,7 +142,7 @@ func TestHandle_IsInvalidBot(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
@@ -152,8 +154,11 @@ func TestHandle_IsValidBot(t *testing.T) {
 
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -185,7 +190,7 @@ func TestHandle_IsValidBot(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
@@ -197,8 +202,11 @@ func TestHandle(t *testing.T) {
 
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -230,15 +238,18 @@ func TestHandle(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
 func Test_isAllowedTeamMember(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	var logger zerolog.Logger
 	testCases := []struct {
@@ -287,8 +298,11 @@ func Test_isAllowedTeamMember(t *testing.T) {
 func Test_rerunFailedJobs(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -334,8 +348,11 @@ func Test_rerunFailedJobs(t *testing.T) {
 func Test_shouldSkipWorkflow(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -775,8 +792,11 @@ func TestHandle_WorkflowStatusTable(t *testing.T) {
 
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -808,7 +828,7 @@ func TestHandle_WorkflowStatusTable(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "issue_comment", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
@@ -1002,8 +1022,11 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(false, false, &[]string{}, false, false)
 	defer server.Close()
 
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
@@ -1042,7 +1065,7 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not return error even though command not found
-	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	err = handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.NoError(t, err)
 }
 
@@ -1058,8 +1081,11 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(true, false, &[]string{}, false, false)
 	defer server.Close()
 
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
@@ -1097,7 +1123,7 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	err = handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.NoError(t, err)
 }
 
@@ -1114,8 +1140,11 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(true, true, &reactions, false, false)
 	defer server.Close()
 
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
@@ -1153,7 +1182,7 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	err = handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.NoError(t, err)
 
 	assert.EqualValues(t, []string{"eyes", "rocket"}, reactions)
@@ -1171,8 +1200,11 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(true, false, &[]string{}, false, false)
 	defer server.Close()
 
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
@@ -1210,7 +1242,7 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	err = handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.NoError(t, err)
 }
 
@@ -1222,8 +1254,11 @@ func TestHandle_WorkflowsDependencyRunningReaction(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(false, false, &reactions, true, true)
 	defer server.Close()
 
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
@@ -1261,7 +1296,7 @@ func TestHandle_WorkflowsDependencyRunningReaction(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	err = handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.Error(t, err)
 	assert.EqualValues(t, []string{"eyes", "+1"}, reactions)
 }
@@ -1274,8 +1309,11 @@ func TestHandle_WorkflowsDependencyFailedReaction(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(false, false, &reactions, true, false)
 	defer server.Close()
 
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(server.URL + "/")
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
 
 	handler := &PRCommentHandler{
@@ -1313,7 +1351,7 @@ func TestHandle_WorkflowsDependencyFailedReaction(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := handler.Handle(ctx, "issue_comment", "1", payload)
+	err = handler.Handle(ctx, "issue_comment", "1", payload)
 	assert.Error(t, err)
 	assert.EqualValues(t, []string{"eyes", "confused"}, reactions)
 }

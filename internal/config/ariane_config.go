@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v88/github"
 	"gopkg.in/yaml.v3"
 
 	"github.com/cilium/ariane/internal/log"

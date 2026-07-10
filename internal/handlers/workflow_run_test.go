@@ -8,11 +8,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -68,9 +67,10 @@ func TestWorkflowRunHandler_ConclusionCancelled(t *testing.T) {
 }
 
 func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse("/")
-	client.BaseURL = baseURL
+	client, err := github.NewClient(github.WithURLs(github.Ptr("/"), github.Ptr("/")))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -101,14 +101,16 @@ func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
 func TestWorkflowRunHandler_NoPullRequestsFromFork(t *testing.T) {
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse("/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr("/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -136,7 +138,7 @@ func TestWorkflowRunHandler_NoPullRequestsFromFork(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
@@ -181,9 +183,11 @@ func TestWorkflowRunHandler_UnauthorizedPRCreator(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(prs)
 			})
 
-			client := github.NewClient(nil)
-			baseURL, _ := url.Parse(server.URL + "/")
-			client.BaseURL = baseURL
+			mockURL := github.Ptr(server.URL + "/")
+			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+			if err != nil {
+				t.Fatalf("Failed to create GitHub client: %v", err)
+			}
 
 			mockCtrl := gomock.NewController(t)
 			mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -214,7 +218,7 @@ func TestWorkflowRunHandler_UnauthorizedPRCreator(t *testing.T) {
 				}
 			}`)
 
-			err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+			err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 			assert.NoError(t, err)
 		})
 	}
@@ -266,9 +270,11 @@ triggers:
 		_ = json.NewEncoder(w).Encode(content)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -303,7 +309,7 @@ triggers:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
@@ -351,9 +357,11 @@ stages-config:
 		_ = json.NewEncoder(w).Encode(content)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -388,7 +396,7 @@ stages-config:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 }
 
@@ -445,9 +453,11 @@ stages-config:
 		}
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -491,7 +501,7 @@ stages-config:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.True(t, commentPosted, "Comment should have been posted")
 }
@@ -571,9 +581,11 @@ stages-config:
 		}
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -608,7 +620,7 @@ stages-config:
     "id": 1
   }
 }`)
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.True(t, commentPosted, "Comment should have been posted")
 	assert.ElementsMatch(t, []string{"test.yaml", "test2.yaml"}, listedWorkflows, "both workflows should be checked")
@@ -689,9 +701,11 @@ stages-config:
 		}
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -726,7 +740,7 @@ stages-config:
     "id": 1
   }
 }`)
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, commentPosted, "Comment should have been posted")
 	assert.ElementsMatch(t, []string{"test.yaml", "test2.yaml"}, listedWorkflows, "both workflows should be checked")
@@ -832,9 +846,11 @@ triggers:
 				}
 			})
 
-			client := github.NewClient(nil)
-			baseURL, _ := url.Parse(server.URL + "/")
-			client.BaseURL = baseURL
+			mockURL := github.Ptr(server.URL + "/")
+			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+			if err != nil {
+				t.Fatalf("Failed to create GitHub client: %v", err)
+			}
 
 			mockCtrl := gomock.NewController(t)
 			mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -870,7 +886,7 @@ triggers:
     "id": 1
   }
 }`)
-			err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+			err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 			assert.NoError(t, err)
 			if tc.shouldTrigger {
 				assert.True(t, commentPosted, "Comment should have been posted for case: %s", tc.name)
@@ -926,9 +942,11 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -964,7 +982,7 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, rerunCalled, "Rerun should not have been called when max retries reached")
 }
@@ -1031,9 +1049,11 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1069,7 +1089,7 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, rerunCalled, "Rerun should not have been called when no jobs failed")
 }
@@ -1117,9 +1137,11 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1155,7 +1177,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, rerunCalled, "Rerun should not have been called for workflow not in allowed list")
 }
@@ -1229,9 +1251,11 @@ rerun:
 		}
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1267,7 +1291,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.True(t, rerunCalled, "Rerun should have been called for workflow in allowed list")
 }
@@ -1321,9 +1345,11 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1359,7 +1385,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, rerunCalled, "Rerun should not have been called because config enforces max of 2 (attempt 3 exceeds it)")
 }
@@ -1431,9 +1457,11 @@ rerun:
 		}
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1469,7 +1497,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.True(t, rerunCalled, "Rerun should have been called when workflows list is empty (allows all)")
 }
@@ -1517,9 +1545,11 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1555,7 +1585,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, rerunCalled, "Rerun should not have been called for workflow in exclude list")
 }
@@ -1605,9 +1635,11 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1643,7 +1675,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.False(t, rerunCalled, "Rerun should not have been called because exclude list takes precedence over allowed list")
 }
@@ -1716,9 +1748,11 @@ rerun:
 		}
 	})
 
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
+	mockURL := github.Ptr(server.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
@@ -1754,7 +1788,7 @@ rerun:
 		}
 	}`)
 
-	err := handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
+	err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 	assert.NoError(t, err)
 	assert.True(t, rerunCalled, "Rerun should have been called for workflow not in exclude list")
 }

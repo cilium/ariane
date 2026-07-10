@@ -5,19 +5,21 @@ package handlers
 
 import (
 	"context"
-	"net/url"
 	"testing"
 
 	"github.com/cilium/ariane/internal/config"
-	github "github.com/google/go-github/v83/github"
+	github "github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 )
 
 func Test_checkTriggerDependency(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse(mockServer.URL + "/")
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
 
 	var logger zerolog.Logger
 	testCases := []struct {

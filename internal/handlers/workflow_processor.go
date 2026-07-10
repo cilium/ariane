@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/cilium/ariane/internal/config"
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 )
@@ -103,7 +103,7 @@ func (w *WorkflowProcessor) shouldRunWorkflow(ctx context.Context, workflow stri
 }
 
 func (w *WorkflowProcessor) triggerWorkflow(ctx context.Context, workflow string, event github.CreateWorkflowDispatchEventRequest) error {
-	if _, err := w.client.Actions.CreateWorkflowDispatchEventByFileName(ctx, w.owner, w.repo, workflow, event); err != nil {
+	if _, _, err := w.client.Actions.CreateWorkflowDispatchEventByFileName(ctx, w.owner, w.repo, workflow, event); err != nil {
 		w.logger.Error().Err(err).Msg("Failed to create workflow dispatch event")
 		return err
 	}
