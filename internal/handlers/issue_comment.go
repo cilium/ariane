@@ -162,19 +162,19 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	err = processor.processWorkflowsForTrigger(ctx, submatch, prNumber, contextRef, headSHA, baseSHA, workflowsToTrigger, dependsOn, commenter)
 	if err != nil {
 		var comment string
-		err, ok := err.(TriggerSkippedDependencyInProgressError)
+		skippedError, ok := err.(TriggerSkippedDependencyInProgressError)
 		if ok {
-			comment = err.Error()
-			logger.Debug().Err(err).Msg(comment)
+			comment = skippedError.Error()
+			logger.Debug().Err(skippedError).Msg(comment)
 			commentErr := commenter.reactToComment(ctx, commentID, "+1")
-			if commentErr == nil {
-				logger.Error().Err(err).Msg("Failed to react to comment with thumbs up emoji")
+			if commentErr != nil {
+				logger.Error().Err(skippedError).Msg("Failed to react to comment with thumbs up emoji")
 			}
 		} else {
-			comment = fmt.Sprintf("Failed to process workflows for trigger: %v", err)
+			comment = fmt.Sprintf("Failed to process workflows for trigger: %s", err.Error())
 			logger.Error().Err(err).Msg(comment)
 			commentErr := commenter.reactToComment(ctx, commentID, "confused")
-			if commentErr == nil {
+			if commentErr != nil {
 				logger.Error().Err(err).Msg("Failed to react to comment with confused emoji")
 			}
 		}
