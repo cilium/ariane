@@ -40,3 +40,6 @@ jobs:
 
     - name: Lint example config
       run: go run linter/main.go example/ariane-config.yaml
+
+    - name: docker build
+      run: docker build .
