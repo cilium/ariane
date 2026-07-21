@@ -6,7 +6,7 @@ WORKDIR /go/src/${REPO}/
 COPY . .
 RUN CGO_ENABLED=0 go build -o /usr/local/bin/ariane
 
-FROM gcr.io/distroless/static-debian12:latest@sha256:61b7ccecebc7c474a531717de80a94709d20547cdcdaf740c25876f2a8e38b44
+FROM gcr.io/distroless/static-debian12:latest@sha256:a9fcaedd4c9b59e12dd65d954f0b5044f19b0647a8a3712e77205df9e7b102cd
 ARG REPO
 
 COPY --from=builder /usr/local/bin/ariane /usr/local/bin/ariane
