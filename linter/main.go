@@ -142,9 +142,6 @@ func validateConfig(cfg *config.ArianeConfig) []error {
 				errs = append(errs, fmt.Errorf("workflow %q has invalid paths-ignore-regex %q: %v", workflow, wfCfg.PathsIgnoreRegex, err))
 			}
 		}
-		if wfCfg.PathsRegex != "" && wfCfg.PathsIgnoreRegex != "" {
-			errs = append(errs, fmt.Errorf("workflow %q defines both paths-regex and paths-ignore-regex, which is unsupported", workflow))
-		}
 	}
 
 	// Validate rerun config
