@@ -169,12 +169,6 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 		return true
 	}
 
-	// PathsRegex and PathsIgnoreRegex are both defined - this is UNSUPPORTED!!
-	// default to run the workflow no matter what
-	if workflowConfig.PathsRegex != "" && workflowConfig.PathsIgnoreRegex != "" {
-		return true
-	}
-
 	var re, reIgnore *regexp.Regexp
 	var err error
 
@@ -199,7 +193,6 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 		// 	PathsRegex has a match
 		// Note: .github/workflows contains env-vars, dependent workflows (e.g. workflow_call),
 		// and other files which may be relevant to the current workflow
-		// TODO: Add intelligence to the "workflows" section of Ariane config to determine dependencies
 		// (common ones [env-vars] + specific of the workflow [dependent WF])
 		// if strings.HasPrefix(filename, ".github/workflows") || re.MatchString(filename) {
 		// 	return true
@@ -209,7 +202,13 @@ func (config *ArianeConfig) ShouldRunWorkflow(ctx context.Context, workflow stri
 		//	The workflow file has been updated
 		//	PathsRegex has a match
 		if filename == `.github/workflows/`+workflow || (re != nil && re.MatchString(filename)) {
-			return true
+			// Flag any finding within PathsIgnoreRegex
+			if reIgnore != nil && reIgnore.MatchString(filename) {
+				numberIgnoredFiles += 1
+			} else {
+				return true
+			}
+			continue
 		} else if strings.HasPrefix(filename, ".github/workflows") {
 			// A change on a different workflow (e.g. bar.yaml) does not qualify to re-run
 			// the one we are validating (e.g. foo.yaml)

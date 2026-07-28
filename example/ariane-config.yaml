@@ -20,6 +20,9 @@ triggers:
 workflows:
   foo.yaml:
     paths-ignore-regex: (bar|baz)/
+  bar.yaml:
+    paths-regex: test
+    paths-ignore-regex: baz # every `baz` file will be ignored even if it matches `test`
 
 feedback:
   verbose: true

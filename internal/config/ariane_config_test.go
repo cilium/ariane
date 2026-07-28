@@ -347,6 +347,10 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 				PathsIgnoreRegex: "(test|Documentation|myproject)/",
 			},
 			"dependency.yaml": {},
+			"both-paths-ignore.yaml": {
+				PathsRegex:       "(.*)",
+				PathsIgnoreRegex: "(test|Documentation|myproject)/",
+			},
 		},
 		AllowedTeams: []string{
 			"team1",
@@ -429,24 +433,48 @@ func Test_ShouldRunWorkflow(t *testing.T) {
 			ExpectedResult: false,
 			ExpectedReason: "changes exist and no paths-regex or paths-ignore-regex are evaluated - however, changes on other workflows do not qualify to trigger the actual workflow (enterprise-foo.yaml). WF will not run",
 		},
-		// foobar.yaml does define both paths-regex and paths-ignore-regex (default: run the workflow)
+		// foobar.yaml does define both paths-regex and paths-ignore-regex
 		{
 			Workflow:       "foobar.yaml",
-			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}, {"filename": ".github/workflows/bar.yaml"}]`),
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foo.yaml"}, {"filename": ".github/workflows/bar.yaml"}, {"filename": "x"}]`),
 			ExpectedResult: true,
-			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - default to run the workflow without evaluating any further",
+			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - run the workflow because x is matching the paths-regex",
+		},
+		{
+			Workflow:       "foobar.yaml",
+			FilenamesJson:  []byte(`[{"filename": "test/test.go"}]`),
+			ExpectedResult: false,
+			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - don't run the workflow because test is explicitly ignored",
 		},
 		{
 			Workflow:       "foobar.yaml",
 			FilenamesJson:  []byte(`[{"filename": "Documentation/operations-guide.rst"}]`),
-			ExpectedResult: true,
-			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - default to run the workflow without evaluating any further",
+			ExpectedResult: false,
+			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined operations-guide is not matching paths-regex",
 		},
 		{
 			Workflow:       "foobar.yaml",
 			FilenamesJson:  []byte(`[]`),
 			ExpectedResult: false,
 			ExpectedReason: "no changes exist, despite both paths-regex and paths-ignore-regex being defined - the workflow will not run",
+		},
+		{
+			Workflow:       "both-paths-ignore.yaml",
+			FilenamesJson:  []byte(`[{"filename": ".github/workflows/foobar.yaml"}]`),
+			ExpectedResult: true,
+			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - run the workflow because foobar workflow got changed",
+		},
+		{
+			Workflow:       "both-paths-ignore.yaml",
+			FilenamesJson:  []byte(`[{"filename": "some-file.go"}]`),
+			ExpectedResult: true,
+			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - run the workflow because foobar got changed",
+		},
+		{
+			Workflow:       "both-paths-ignore.yaml",
+			FilenamesJson:  []byte(`[{"filename": "test/test.go"}]`),
+			ExpectedResult: false,
+			ExpectedReason: "changes exist and both paths-regex and paths-ignore-regex are defined - don't run the workflow because only ignored file is changed",
 		},
 		{
 			Workflow:       "dependency.yaml",
