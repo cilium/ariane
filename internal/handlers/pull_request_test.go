@@ -14,6 +14,110 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+func TestPRHandle_IsInvalidBot(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepository
+
+	mockServer := setMockServerPullRequest()
+	defer mockServer.Close()
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PullRequestHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+  "action": "synchronize",
+  "number": 101,
+  "pull_request": {
+    "number": 201,
+    "state": "open",
+    "title": "title",
+    "user": {
+      "login": "other[bot]"
+    }
+  },
+  "repository": {
+    "id": 1,
+    "name": "repo",
+    "full_name": "owner/repo",
+    "owner": {
+      "login": "owner",
+      "type": "Organization",
+      "user_view_type": "public",
+      "site_admin": false
+    }
+  }
+}`)
+
+	err = handler.Handle(context.Background(), "pull_request", "deliveryID", payload)
+	assert.Error(t, err)
+}
+
+func TestPRHandle_IsValidBot(t *testing.T) {
+	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
+	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
+
+	configGetArianeConfigFromRepository = mockGetArianeConfigFromRepository
+
+	mockServer := setMockServerPullRequest()
+	defer mockServer.Close()
+	mockURL := github.Ptr(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockClientCreator := NewMockClientCreator(mockCtrl)
+	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+
+	handler := &PullRequestHandler{
+		ClientCreator:    mockClientCreator,
+		RunDelay:         time.Second,
+		MaxRetryAttempts: config.DefaultMaxRetryAttempts,
+	}
+
+	payload := []byte(`{
+  "action": "synchronize",
+  "number": 201,
+  "pull_request": {
+    "number": 101,
+    "state": "open",
+    "title": "title",
+    "user": {
+      "login": "owner[bot]"
+    }
+  },
+  "repository": {
+    "id": 1,
+    "name": "repo",
+    "full_name": "owner/repo",
+    "owner": {
+      "login": "owner",
+      "type": "Organization",
+      "user_view_type": "public",
+      "site_admin": false
+    }
+  }
+}`)
+
+	err = handler.Handle(context.Background(), "pull_request", "deliveryID", payload)
+	assert.NoError(t, err)
+}
+
 func TestPRHandle_TrustedAuthor(t *testing.T) {
 	oldconfigGetArianeConfigFromRepository := configGetArianeConfigFromRepository
 	defer func() { configGetArianeConfigFromRepository = oldconfigGetArianeConfigFromRepository }()
@@ -126,10 +230,15 @@ func setMockServerPullRequest() *httptest.Server {
 		username := "owner"
 
 		switch number {
+		case "101":
+			username = "owner[bot]"
+		case "201":
+			username = "other[bot]"
 		case "301":
 			username = "trustedauthor"
 		case "401":
 			username = "untrustedauthor"
+
 		}
 		pr := &github.PullRequest{
 			User:  &github.User{Login: github.Ptr(username)},

@@ -82,12 +82,25 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	commentAuthor := event.GetComment().GetUser().GetLogin()
 	commentBody := event.GetComment().GetBody()
 
+	var botUser bool
+
 	// skip all comments that do not start with / (with optional leading whitespace)
 	if !strings.HasPrefix(strings.TrimSpace(commentBody), "/") {
 		return nil
 	}
 
 	commenter := NewGithubCommenter(client, repositoryOwner, repositoryName, logger)
+
+	// only handle non-bot comments
+	if strings.HasSuffix(commentAuthor, "[bot]") {
+		if !strings.HasPrefix(commentAuthor, repositoryOwner) {
+			comment := fmt.Sprintf("Issue comment was created by an unsupported bot: %s", commentAuthor)
+			logger.Debug().Msg(comment)
+			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
+			return nil
+		}
+		botUser = true
+	}
 
 	// Get PR metadata and validate PR author permissions
 	pr, err := getPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, logger, h.MaxRetryAttempts)
@@ -110,7 +123,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	}
 
 	// only handle comments coming from an allowed organization, if specified
-	if !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, commentAuthor, logger) {
+	if !botUser && !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, commentAuthor, logger) {
 		if arianeConfig.GetVerbose() {
 			comment := fmt.Sprintf("Comment by %s not allowed", commentAuthor)
 			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
