@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cilium/ariane/internal/log"
@@ -72,9 +73,21 @@ func (p *PullRequestHandler) Handle(ctx context.Context, eventType, deliveryID s
 		return err
 	}
 
+	botUser := false
 	author := ""
 	if pr.GetUser().GetLogin() != "" {
 		author = pr.GetUser().GetLogin()
+	}
+
+	// only handle non-bot comments
+	if strings.HasSuffix(author, "[bot]") {
+		if !strings.HasPrefix(author, repositoryOwner) {
+			comment := fmt.Sprintf("Issue comment was created by an unsupported bot: %s", author)
+			logger.Debug().Msg(comment)
+			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
+			return fmt.Errorf("pull request author does not contain bot user")
+		}
+		botUser = true
 	}
 
 	contextRef, headSHA, baseSHA := determineContextRef(pr, repositoryOwner, repositoryName, logger)
@@ -90,7 +103,7 @@ func (p *PullRequestHandler) Handle(ctx context.Context, eventType, deliveryID s
 	}
 
 	// only handle comments coming from an allowed organization, if specified
-	if !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, author, logger) {
+	if !botUser && !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, author, logger) {
 		if arianeConfig.GetVerbose() {
 			comment := fmt.Sprintf("The default testsuite was requested, but %s cannot trigger the tests. When the reviewers get a chance to inspect this PR, they should review the content of this PR and then trigger the testsuite on your behalf.", author)
 			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
