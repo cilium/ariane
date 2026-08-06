@@ -72,6 +72,11 @@ func (p *PullRequestHandler) Handle(ctx context.Context, eventType, deliveryID s
 		return err
 	}
 
+	author := ""
+	if pr.GetUser().GetLogin() != "" {
+		author = pr.GetUser().GetLogin()
+	}
+
 	contextRef, headSHA, baseSHA := determineContextRef(pr, repositoryOwner, repositoryName, logger)
 	logger.Debug().Str("context_ref", contextRef).Str("head_sha", headSHA).Str("base_sha", baseSHA).Msg("Determined context for configuration retrieval")
 
@@ -82,6 +87,18 @@ func (p *PullRequestHandler) Handle(ctx context.Context, eventType, deliveryID s
 		logger.Error().Err(err).Msg(comment)
 		_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
 		return err
+	}
+
+	// only handle comments coming from an allowed organization, if specified
+	if !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, author, logger) {
+		if arianeConfig.GetVerbose() {
+			comment := fmt.Sprintf("/default run by %s not allowed", author)
+			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
+		}
+		if err := commenter.reactToPR(ctx, prNumber, "eyes"); err != nil {
+			return err
+		}
+		return fmt.Errorf("author is not an allowed team member")
 	}
 
 	// only handle comments matching a registered trigger, and retrieve associated list of workflows to trigger

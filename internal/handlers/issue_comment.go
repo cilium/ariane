@@ -82,25 +82,12 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	commentAuthor := event.GetComment().GetUser().GetLogin()
 	commentBody := event.GetComment().GetBody()
 
-	var botUser bool
-
 	// skip all comments that do not start with / (with optional leading whitespace)
 	if !strings.HasPrefix(strings.TrimSpace(commentBody), "/") {
 		return nil
 	}
 
 	commenter := NewGithubCommenter(client, repositoryOwner, repositoryName, logger)
-
-	// only handle non-bot comments
-	if strings.HasSuffix(commentAuthor, "[bot]") {
-		if !strings.HasPrefix(commentAuthor, repositoryOwner) {
-			comment := fmt.Sprintf("Issue comment was created by an unsupported bot: %s", commentAuthor)
-			logger.Debug().Msg(comment)
-			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
-			return nil
-		}
-		botUser = true
-	}
 
 	// Get PR metadata and validate PR author permissions
 	pr, err := getPullRequest(ctx, client, repositoryOwner, repositoryName, prNumber, logger, h.MaxRetryAttempts)
@@ -123,14 +110,13 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	}
 
 	// only handle comments coming from an allowed organization, if specified
-	if !botUser && !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, commentAuthor, logger) {
-		// TODO It would be beneficial to provide feedback indicating that the test run was rejected.
-		// Initially considered updating the comment with a "no entry" emoji, but given the limited
-		// selection of emojis that can be used, none appeared to be entirely fitting.
-		// Maybe alternative feedback mechanisms should be explored to communicate the rejection status clearly.
+	if !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, commentAuthor, logger) {
 		if arianeConfig.GetVerbose() {
 			comment := fmt.Sprintf("Comment by %s not allowed", commentAuthor)
 			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
+		}
+		if err := commenter.reactToPR(ctx, prNumber, "eyes"); err != nil {
+			return err
 		}
 		return nil
 	}
