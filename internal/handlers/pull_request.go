@@ -92,7 +92,7 @@ func (p *PullRequestHandler) Handle(ctx context.Context, eventType, deliveryID s
 	// only handle comments coming from an allowed organization, if specified
 	if !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, author, logger) {
 		if arianeConfig.GetVerbose() {
-			comment := fmt.Sprintf("/default run by %s not allowed", author)
+			comment := fmt.Sprintf("The default testsuite was requested, but %s cannot trigger the tests. When the reviewers get a chance to inspect this PR, they should review the content of this PR and then trigger the testsuite on your behalf.", author)
 			_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
 		}
 		if err := commenter.reactToPR(ctx, prNumber, "eyes"); err != nil {
