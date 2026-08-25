@@ -385,12 +385,10 @@ func (w *WorkflowProcessor) runIsTriggerDependency(workflowRun *github.WorkflowR
 }
 
 const commentSince = -3 * time.Hour
-const recentCutoff = 0 // lets revisit this value if we see too many comments being posted due to the dependency check
 const commentLookbackLimit = 100
 
 // processDependantWorkflows checks if the completed workflow run satisfies any trigger dependencies
 // and posts the corresponding command on the PR if all dependencies are met and the command was posted previously within the last commentSince.
-// To avoid spam, we use recentCutoff to not post the command if it was already posted recently (e.g. within the last 15 minutes)
 func (w *WorkflowProcessor) processDependantWorkflows(ctx context.Context, pullRequest *github.PullRequest, prNumber int, workflowRun *github.WorkflowRun) error {
 triggers:
 	for triggerPhrase, trigger := range w.arianeConfig.Triggers {
@@ -418,10 +416,8 @@ triggers:
 			}
 		}
 
-		// All dependencies are met, post the command on the PR if it was posted
-		// previously (but not very recently)
+		// All dependencies are met, post the command on the PR if it was posted previously
 		since := time.Now().Add(commentSince) // Check comments from the last 3 hours
-		recent := time.Now().Add(recentCutoff)
 
 		comments, err := getComments(ctx, w.client, w.owner, w.repo, prNumber, w.logger, since, commentLookbackLimit)
 		if err != nil {
@@ -429,7 +425,6 @@ triggers:
 			continue
 		}
 		foundTriggerComment := ""
-		foundRecentTriggerComment := false
 		re, err := regexp.Compile(triggerPhrase)
 		if err != nil {
 			w.logger.Error().Err(err).Msgf("Failed to compile regex for trigger phrase '%s'", triggerPhrase)
@@ -438,13 +433,9 @@ triggers:
 		for _, comment := range comments {
 			if re.MatchString(comment.GetBody()) {
 				foundTriggerComment = comment.GetBody()
-				if comment.CreatedAt.GetTime().After(recent) {
-					foundRecentTriggerComment = true
-					break
-				}
 			}
 		}
-		if len(foundTriggerComment) > 0 && !foundRecentTriggerComment { // do not post comment if it was posted within recentCutoff time
+		if len(foundTriggerComment) > 0 {
 			w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, posting command on PR #%d", triggerPhrase, prNumber)
 			if err := commentOnPullRequest(ctx, w.client, w.owner, w.repo, prNumber, foundTriggerComment, w.logger); err != nil {
 				w.logger.Error().Err(err).Msgf("Failed to post command on PR #%d", prNumber)

@@ -762,15 +762,6 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			},
 			shouldTrigger: true,
 		},
-		{name: "previous comment too young",
-			comments: []github.IssueComment{
-				{
-					Body:      github.Ptr("/test"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(+1 * time.Minute).Add(recentCutoff)},
-				},
-			},
-			shouldTrigger: false,
-		},
 	}
 	// we are not testing the comment being too old because GH API filtering ensures that we won't get those comments at all
 
