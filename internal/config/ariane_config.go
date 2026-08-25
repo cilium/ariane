@@ -34,7 +34,9 @@ type ArianeConfig struct {
 type FeedbackConfig struct {
 	// Whether to log verbose feedback
 	Verbose *bool `yaml:"verbose,omitempty"`
-	// Whether to react to comments and pull request descriptions
+	// Whether to react to comments and pull request descriptions. The thumbs up marking a
+	// command deferred until its dependencies complete is added regardless, as Ariane
+	// relies on it to dispatch the command later.
 	Reactions *bool `yaml:"reactions,omitempty"`
 	// Whether to report on workflows triggered by ariane
 	WorkflowsReport *bool `yaml:"workflows-report,omitempty"`

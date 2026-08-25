@@ -747,38 +747,74 @@ stages-config:
 }
 
 func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
+	// deferredComment is a command Ariane deferred: the reaction summary the comment
+	// listing carries reports the pending marker, which the reaction lookup then
+	// attributes to Ariane.
+	deferredComment := func(body string) github.IssueComment {
+		return github.IssueComment{
+			ID:        new(int64(55)),
+			Body:      new(body),
+			CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+			Reactions: &github.Reactions{PlusOne: new(1)},
+		}
+	}
+
 	testCases := []struct {
-		name          string
-		comments      []github.IssueComment
-		shouldTrigger bool
+		name              string
+		comments          []github.IssueComment
+		pendingMarker     bool
+		reactionsDisabled bool
+		shouldTrigger     bool
 	}{
-		{name: "no previous comments", comments: []github.IssueComment{}, shouldTrigger: false},
+		{name: "no previous comments", comments: []github.IssueComment{}, pendingMarker: true, shouldTrigger: false},
 		{name: "trigger phrase in URL",
-			comments: []github.IssueComment{
-				{
-					Body:      new("See https://github.com/owner/repo/tests/example.go"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
-				},
-			},
+			comments:      []github.IssueComment{deferredComment("See https://github.com/owner/repo/tests/example.go")},
+			pendingMarker: true,
 			shouldTrigger: false,
 		},
 		{name: "previous comment in proper time window",
-			comments: []github.IssueComment{
-				{
-					Body:      new("/test"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
-				},
-			},
+			comments:      []github.IssueComment{deferredComment("/test")},
+			pendingMarker: true,
 			shouldTrigger: true,
 		},
 		{name: "previous comment does not match a trigger on its own",
+			comments:      []github.IssueComment{deferredComment("please /test once this is green")},
+			pendingMarker: true,
+			shouldTrigger: false,
+		},
+		{name: "previous comment was never deferred",
+			comments:      []github.IssueComment{deferredComment("/test")},
+			pendingMarker: false,
+			shouldTrigger: false,
+		},
+		{name: "previous comment carries no thumbs up at all",
+			comments: []github.IssueComment{{
+				ID:        new(int64(55)),
+				Body:      new("/test"),
+				CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+				Reactions: &github.Reactions{PlusOne: new(0)},
+			}},
+			pendingMarker: true,
+			shouldTrigger: false,
+		},
+		{name: "deferred command followed by the same command that was not deferred",
 			comments: []github.IssueComment{
+				deferredComment("/test"),
 				{
-					Body:      new("please /test once this is green"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+					ID:        new(int64(56)),
+					Body:      new("/test"),
+					CreatedAt: &github.Timestamp{Time: time.Now().Add(-30 * time.Minute)},
+					Reactions: &github.Reactions{PlusOne: new(0)},
 				},
 			},
-			shouldTrigger: false,
+			pendingMarker: true,
+			shouldTrigger: true,
+		},
+		{name: "deferred command with reactions disabled",
+			comments:          []github.IssueComment{deferredComment("/test")},
+			pendingMarker:     true,
+			reactionsDisabled: true,
+			shouldTrigger:     true,
 		},
 	}
 	// we are not testing the comment being too old because GH API filtering ensures that we won't get those comments at all
@@ -791,6 +827,9 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			defer server.Close()
 
 			workflowDispatched := false
+			pendingMarkerRemoved := false
+			dispatchReactionAdded := false
+			reactionsListed := false
 			var listedWorkflows []string
 
 			// Mock PR endpoint
@@ -838,6 +877,12 @@ triggers:
     workflows:
     - dependency.yaml
 `
+				if tc.reactionsDisabled {
+					configContent += `
+feedback:
+  reactions: false
+`
+				}
 				content := &github.RepositoryContent{
 					Content: new(configContent),
 				}
@@ -854,6 +899,33 @@ triggers:
 					},
 				}
 				_ = json.NewEncoder(w).Encode(runs)
+			})
+
+			// Mock the pending marker Ariane left on the deferred command
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					var reaction github.Reaction
+					_ = json.NewDecoder(r.Body).Decode(&reaction)
+					assert.Equal(t, "rocket", reaction.GetContent())
+					dispatchReactionAdded = true
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(&github.Reaction{ID: new(int64(100))})
+					return
+				}
+				reactionsListed = true
+				reactions := []*github.Reaction{}
+				if tc.pendingMarker {
+					reactions = append(reactions, &github.Reaction{
+						ID:   new(int64(99)),
+						User: &github.User{Login: new(testAppBotLogin)},
+					})
+				}
+				_ = json.NewEncoder(w).Encode(reactions)
+			})
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions/99", func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodDelete, r.Method)
+				pendingMarkerRemoved = true
+				w.WriteHeader(http.StatusNoContent)
 			})
 
 			// Mock comment listing endpoint. Ariane must no longer post the command itself.
@@ -879,6 +951,7 @@ triggers:
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
+				AppBotLogin:   testAppBotLogin,
 			}
 
 			payload := []byte(`{
@@ -912,8 +985,14 @@ triggers:
 			if tc.shouldTrigger {
 				assert.True(t, workflowDispatched, "Workflow should have been dispatched for case: %s", tc.name)
 				assert.Contains(t, listedWorkflows, "dependency.yaml", "the dependency should be checked")
+				assert.True(t, pendingMarkerRemoved, "The pending marker should have been consumed for case: %s", tc.name)
+				assert.Equal(t, !tc.reactionsDisabled, dispatchReactionAdded, "The comment should be marked as dispatched only if reactions are enabled for case: %s", tc.name)
 			} else {
 				assert.False(t, workflowDispatched, "Workflow should not have been dispatched for case: %s", tc.name)
+				assert.False(t, pendingMarkerRemoved, "The pending marker should have been left in place for case: %s", tc.name)
+			}
+			if tc.name == "previous comment carries no thumbs up at all" {
+				assert.False(t, reactionsListed, "A comment with no thumbs up should not cost a reaction lookup")
 			}
 		}()
 	}
@@ -1022,6 +1101,20 @@ triggers:
 				_ = json.NewEncoder(w).Encode(runs)
 			})
 
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(&github.Reaction{ID: new(int64(100))})
+					return
+				}
+				_ = json.NewEncoder(w).Encode([]*github.Reaction{
+					{ID: new(int64(99)), User: &github.User{Login: new(testAppBotLogin)}},
+				})
+			})
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions/99", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			})
+
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
 					assert.Fail(t, "the command must be dispatched directly, not commented again")
@@ -1030,8 +1123,10 @@ triggers:
 				} else {
 					_ = json.NewEncoder(w).Encode([]github.IssueComment{
 						{
+							ID:        new(int64(55)),
 							Body:      new("/test"),
 							CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+							Reactions: &github.Reactions{PlusOne: new(1)},
 						},
 					})
 				}
@@ -1049,6 +1144,7 @@ triggers:
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
+				AppBotLogin:   testAppBotLogin,
 			}
 
 			payload := []byte(`{
