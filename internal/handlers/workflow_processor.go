@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -366,6 +367,23 @@ func (w *WorkflowProcessor) getWorkflowCheck(ctx context.Context, workflow, sha 
 	return nil, fmt.Errorf("no %s checks found for workflow %s", nameSource.Name, workflow)
 }
 
+// runIsTriggerDependency reports whether the completed workflow run is one of the
+// workflows of the given trigger dependencies.
+func (w *WorkflowProcessor) runIsTriggerDependency(workflowRun *github.WorkflowRun, dependsOn []string) (bool, error) {
+	runWorkflow := filepath.Base(workflowRun.GetPath())
+	for _, dependencyTriggerPhrase := range dependsOn {
+		dependencyTrigger, ok := w.arianeConfig.Triggers[dependencyTriggerPhrase]
+		if !ok {
+			return false, errors.New("dependency trigger " + dependencyTriggerPhrase + " not found in Ariane trigger config")
+		}
+
+		if slices.Contains(dependencyTrigger.Workflows, runWorkflow) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 const commentSince = -3 * time.Hour
 const recentCutoff = 0 // lets revisit this value if we see too many comments being posted due to the dependency check
 const commentLookbackLimit = 100
@@ -376,53 +394,60 @@ const commentLookbackLimit = 100
 func (w *WorkflowProcessor) processDependantWorkflows(ctx context.Context, pullRequest *github.PullRequest, prNumber int, workflowRun *github.WorkflowRun) error {
 triggers:
 	for triggerPhrase, trigger := range w.arianeConfig.Triggers {
+		// The completed workflow run only concerns this trigger if it is part of one
+		// of the trigger's dependencies.
+		isDependency, err := w.runIsTriggerDependency(workflowRun, trigger.DependsOn)
+		if err != nil {
+			return err
+		}
+		if !isDependency {
+			continue
+		}
+
+		// The completed run is part of a dependency for this trigger: every one of the
+		// trigger's dependencies must be satisfied before the command is posted.
 		for _, dependencyTriggerPhrase := range trigger.DependsOn {
-			dependencyTrigger, ok := w.arianeConfig.Triggers[dependencyTriggerPhrase]
-			if !ok {
-				return errors.New("dependency trigger " + dependencyTriggerPhrase + " not found in Ariane trigger config")
+			dependencySatisfied, _, err := w.checkTriggerDependency(ctx, dependencyTriggerPhrase, pullRequest.GetHead().GetSHA())
+			if err != nil {
+				w.logger.Error().Err(err).Msgf("Failed to check dependency '%s' for trigger '%s'", dependencyTriggerPhrase, triggerPhrase)
+				continue triggers
 			}
+			if !dependencySatisfied {
+				w.logger.Debug().Msgf("Dependency '%s' for trigger '%s' is not satisfied yet", dependencyTriggerPhrase, triggerPhrase)
+				continue triggers
+			}
+		}
 
-			for _, workflow := range dependencyTrigger.Workflows {
-				if filepath.Base(workflowRun.GetPath()) == workflow {
-					// successful workflow run is a part of dependency for a trigger, check if all dependencies are met and if so, post the command on the PR if it was posted previously (but not very recently)
-					dependenciesSatisfied, _, err := w.checkTriggerDependency(ctx, dependencyTriggerPhrase, pullRequest.GetHead().GetSHA())
-					if err != nil {
-						w.logger.Error().Err(err).Msgf("Failed to check dependencies for trigger '%s'", triggerPhrase)
-					}
-					if dependenciesSatisfied {
-						since := time.Now().Add(commentSince) // Check comments from the last 3 hours
-						recent := time.Now().Add(recentCutoff)
+		// All dependencies are met, post the command on the PR if it was posted
+		// previously (but not very recently)
+		since := time.Now().Add(commentSince) // Check comments from the last 3 hours
+		recent := time.Now().Add(recentCutoff)
 
-						comments, err := getComments(ctx, w.client, w.owner, w.repo, prNumber, w.logger, since, commentLookbackLimit)
-						if err != nil {
-							w.logger.Error().Err(err).Msgf("Failed to retrieve comments for PR #%d", prNumber)
-							continue
-						}
-						foundTriggerComment := ""
-						foundRecentTriggerComment := false
-						re, err := regexp.Compile(triggerPhrase)
-						if err != nil {
-							w.logger.Error().Err(err).Msgf("Failed to compile regex for trigger phrase '%s'", triggerPhrase)
-							continue triggers
-						}
-						for _, comment := range comments {
-							if re.MatchString(comment.GetBody()) {
-								foundTriggerComment = comment.GetBody()
-								if comment.CreatedAt.GetTime().After(recent) {
-									foundRecentTriggerComment = true
-									break
-								}
-							}
-						}
-						if len(foundTriggerComment) > 0 && !foundRecentTriggerComment { // do not post comment if it was posted within recentCutoff time
-							w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, posting command on PR #%d", triggerPhrase, prNumber)
-							if err := commentOnPullRequest(ctx, w.client, w.owner, w.repo, prNumber, foundTriggerComment, w.logger); err != nil {
-								w.logger.Error().Err(err).Msgf("Failed to post command on PR #%d", prNumber)
-							}
-							continue triggers
-						}
-					}
+		comments, err := getComments(ctx, w.client, w.owner, w.repo, prNumber, w.logger, since, commentLookbackLimit)
+		if err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to retrieve comments for PR #%d", prNumber)
+			continue
+		}
+		foundTriggerComment := ""
+		foundRecentTriggerComment := false
+		re, err := regexp.Compile(triggerPhrase)
+		if err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to compile regex for trigger phrase '%s'", triggerPhrase)
+			continue
+		}
+		for _, comment := range comments {
+			if re.MatchString(comment.GetBody()) {
+				foundTriggerComment = comment.GetBody()
+				if comment.CreatedAt.GetTime().After(recent) {
+					foundRecentTriggerComment = true
+					break
 				}
+			}
+		}
+		if len(foundTriggerComment) > 0 && !foundRecentTriggerComment { // do not post comment if it was posted within recentCutoff time
+			w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, posting command on PR #%d", triggerPhrase, prNumber)
+			if err := commentOnPullRequest(ctx, w.client, w.owner, w.repo, prNumber, foundTriggerComment, w.logger); err != nil {
+				w.logger.Error().Err(err).Msgf("Failed to post command on PR #%d", prNumber)
 			}
 		}
 	}
