@@ -20,7 +20,8 @@ import (
 
 type WorkflowRunHandler struct {
 	githubapp.ClientCreator
-	RunDelay time.Duration
+	RunDelay    time.Duration
+	AppBotLogin string
 }
 
 func (*WorkflowRunHandler) Handles() []string {
@@ -193,6 +194,7 @@ func (w *WorkflowRunHandler) handleSuccessfulRun(
 		arianeConfig: arianeConfig,
 		logger:       logger,
 		runDelay:     w.RunDelay,
+		appBotLogin:  w.AppBotLogin,
 	}
 
 	return multierr.Combine(

@@ -160,3 +160,25 @@ func TestGithubCommenter_ReactionsDisabled(t *testing.T) {
 	assert.NoError(t, commenter.reactToComment(context.Background(), 1, "eyes"))
 	assert.NoError(t, commenter.reactToPR(context.Background(), 1, "rocket"))
 }
+
+func TestGithubCommenter_MarkPendingWithReactionsDisabled(t *testing.T) {
+	var addedContent string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/owner/repo/issues/comments/123/reactions", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		var reaction github.Reaction
+		_ = json.NewDecoder(r.Body).Decode(&reaction)
+		addedContent = reaction.GetContent()
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(&github.Reaction{ID: new(int64(42))})
+	})
+
+	commenter := newTestCommenter(t, mux)
+	commenter.setReactionsEnabled(false)
+
+	// The pending marker is state rather than feedback, so disabling reactions must
+	// not prevent it from being added.
+	assert.NoError(t, commenter.markPending(context.Background(), 123))
+	assert.Equal(t, pendingTriggerReaction, addedContent)
+}

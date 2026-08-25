@@ -10,6 +10,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// pendingTriggerReaction marks a command whose dependencies were not met when it was
+// requested. The issue_comment handler adds it when it defers the command, and the
+// workflow_run handler consumes it once the dependencies complete. It is Ariane's record
+// that the command is still awaited, so it must be removed as soon as it is acted on.
+const pendingTriggerReaction = "+1"
+
 type GithubCommenter struct {
 	client           *github.Client
 	owner            string
@@ -53,6 +59,17 @@ func (c *GithubCommenter) reactToComment(ctx context.Context, commentID int64, e
 	}
 	if _, _, err := c.client.Reactions.CreateIssueCommentReaction(ctx, c.owner, c.repo, commentID, emoji); err != nil {
 		c.logger.Error().Err(err).Msgf("Failed to react to comment with %s emoji", emoji)
+		return err
+	}
+	return nil
+}
+
+// markPending adds the pending marker to a deferred command. Unlike the other reactions
+// it is not feedback but the state the workflow_run handler relies on to dispatch the
+// command, so it is added even when reactions are disabled.
+func (c *GithubCommenter) markPending(ctx context.Context, commentID int64) error {
+	if _, _, err := c.client.Reactions.CreateIssueCommentReaction(ctx, c.owner, c.repo, commentID, pendingTriggerReaction); err != nil {
+		c.logger.Error().Err(err).Msgf("Failed to mark comment %d as pending", commentID)
 		return err
 	}
 	return nil
