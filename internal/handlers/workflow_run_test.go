@@ -771,6 +771,15 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			},
 			shouldTrigger: true,
 		},
+		{name: "previous comment does not match a trigger on its own",
+			comments: []github.IssueComment{
+				{
+					Body:      new("please /test once this is green"),
+					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+				},
+			},
+			shouldTrigger: false,
+		},
 	}
 	// we are not testing the comment being too old because GH API filtering ensures that we won't get those comments at all
 
@@ -781,7 +790,7 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			commentPosted := false
+			workflowDispatched := false
 			var listedWorkflows []string
 
 			// Mock PR endpoint
@@ -799,6 +808,21 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
+			})
+
+			// Mock PR files endpoint, so that the triggered workflows are not skipped
+			mux.HandleFunc("/repos/owner/repo/pulls/1/files", func(w http.ResponseWriter, r *http.Request) {
+				files := []*github.CommitFile{{Filename: new("main.go")}}
+				_ = json.NewEncoder(w).Encode(files)
+			})
+
+			// Mock the triggered workflow: no previous run, and record the dispatch
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(&github.WorkflowRuns{TotalCount: new(0)})
+			})
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/dispatches", func(w http.ResponseWriter, r *http.Request) {
+				workflowDispatched = true
+				w.WriteHeader(http.StatusNoContent)
 			})
 
 			// Mock config file endpoint with two workflows in the same stage
@@ -832,13 +856,10 @@ triggers:
 				_ = json.NewEncoder(w).Encode(runs)
 			})
 
-			// Mock comment creation endpoint
+			// Mock comment listing endpoint. Ariane must no longer post the command itself.
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
-					var comment github.IssueComment
-					_ = json.NewDecoder(r.Body).Decode(&comment)
-					assert.Equal(t, "/test", comment.GetBody())
-					commentPosted = true
+					assert.Fail(t, "the command must be dispatched directly, not commented again")
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 				} else {
@@ -889,11 +910,11 @@ triggers:
 			err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 			assert.NoError(t, err)
 			if tc.shouldTrigger {
-				assert.True(t, commentPosted, "Comment should have been posted for case: %s", tc.name)
+				assert.True(t, workflowDispatched, "Workflow should have been dispatched for case: %s", tc.name)
+				assert.Contains(t, listedWorkflows, "dependency.yaml", "the dependency should be checked")
 			} else {
-				assert.False(t, commentPosted, "Comment should not have been posted for case: %s", tc.name)
+				assert.False(t, workflowDispatched, "Workflow should not have been dispatched for case: %s", tc.name)
 			}
-			assert.ElementsMatch(t, []string{"dependency.yaml"}, listedWorkflows, "both workflows should be checked")
 		}()
 	}
 }
@@ -902,28 +923,24 @@ triggers:
 // one of them must not post the command until every dependency is satisfied.
 func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		secondDependencyRun  github.WorkflowRun
-		shouldTrigger        bool
-		expectedListedChecks []string
+		name                string
+		secondDependencyRun github.WorkflowRun
+		shouldTrigger       bool
 	}{
 		{
-			name:                 "second dependency still in progress",
-			secondDependencyRun:  github.WorkflowRun{Status: new("in_progress")},
-			shouldTrigger:        false,
-			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
+			name:                "second dependency still in progress",
+			secondDependencyRun: github.WorkflowRun{Status: new("in_progress")},
+			shouldTrigger:       false,
 		},
 		{
-			name:                 "second dependency failed",
-			secondDependencyRun:  github.WorkflowRun{Status: new("completed"), Conclusion: new("failure")},
-			shouldTrigger:        false,
-			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
+			name:                "second dependency failed",
+			secondDependencyRun: github.WorkflowRun{Status: new("completed"), Conclusion: new("failure")},
+			shouldTrigger:       false,
 		},
 		{
-			name:                 "all dependencies satisfied",
-			secondDependencyRun:  github.WorkflowRun{Status: new("completed"), Conclusion: new("success")},
-			shouldTrigger:        true,
-			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
+			name:                "all dependencies satisfied",
+			secondDependencyRun: github.WorkflowRun{Status: new("completed"), Conclusion: new("success")},
+			shouldTrigger:       true,
 		},
 	}
 
@@ -933,7 +950,7 @@ func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			commentPosted := false
+			workflowDispatched := false
 			var listedWorkflows []string
 
 			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
@@ -947,6 +964,19 @@ func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
+			})
+
+			mux.HandleFunc("/repos/owner/repo/pulls/1/files", func(w http.ResponseWriter, r *http.Request) {
+				files := []*github.CommitFile{{Filename: new("main.go")}}
+				_ = json.NewEncoder(w).Encode(files)
+			})
+
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(&github.WorkflowRuns{TotalCount: new(0)})
+			})
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/dispatches", func(w http.ResponseWriter, r *http.Request) {
+				workflowDispatched = true
+				w.WriteHeader(http.StatusNoContent)
 			})
 
 			mux.HandleFunc("/repos/owner/repo/contents/.github/ariane-config.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -994,10 +1024,7 @@ triggers:
 
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
-					var comment github.IssueComment
-					_ = json.NewDecoder(r.Body).Decode(&comment)
-					assert.Equal(t, "/test", comment.GetBody())
-					commentPosted = true
+					assert.Fail(t, "the command must be dispatched directly, not commented again")
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 				} else {
@@ -1053,11 +1080,12 @@ triggers:
 			err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 			assert.NoError(t, err)
 			if tc.shouldTrigger {
-				assert.True(t, commentPosted, "Comment should have been posted for case: %s", tc.name)
+				assert.True(t, workflowDispatched, "Workflow should have been dispatched for case: %s", tc.name)
 			} else {
-				assert.False(t, commentPosted, "Comment should not have been posted for case: %s", tc.name)
+				assert.False(t, workflowDispatched, "Workflow should not have been dispatched for case: %s", tc.name)
 			}
-			assert.ElementsMatch(t, tc.expectedListedChecks, listedWorkflows, "all dependencies should be checked for case: %s", tc.name)
+			assert.Contains(t, listedWorkflows, "dependency-a.yaml", "for case: %s", tc.name)
+			assert.Contains(t, listedWorkflows, "dependency-b.yaml", "for case: %s", tc.name)
 		}()
 	}
 }
