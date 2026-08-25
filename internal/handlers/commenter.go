@@ -49,6 +49,39 @@ func (c *GithubCommenter) reactToComment(ctx context.Context, commentID int64, e
 	return nil
 }
 
+// findReaction returns the ID of the reaction with the given emoji left on the comment
+// by login, or 0 if there is none. Callers pass Ariane's own bot login, as returned by
+// appBotLogin: an organization may run other bots, and their reactions must not be
+// mistaken for ours.
+func (c *GithubCommenter) findReaction(ctx context.Context, commentID int64, emoji, login string) (int64, error) {
+	opts := &github.ListReactionOptions{Content: emoji, ListOptions: github.ListOptions{PerPage: 100}}
+	for {
+		reactions, response, err := c.client.Reactions.ListIssueCommentReactions(ctx, c.owner, c.repo, commentID, opts)
+		if err != nil {
+			c.logger.Error().Err(err).Msgf("Failed to list %s reactions on comment %d", emoji, commentID)
+			return 0, err
+		}
+		for _, reaction := range reactions {
+			if reaction.GetUser().GetLogin() == login {
+				return reaction.GetID(), nil
+			}
+		}
+		if response.NextPage == 0 {
+			return 0, nil
+		}
+		opts.Page = response.NextPage
+	}
+}
+
+// removeReaction removes a previously created reaction from a comment.
+func (c *GithubCommenter) removeReaction(ctx context.Context, commentID, reactionID int64) error {
+	if _, err := c.client.Reactions.DeleteIssueCommentReaction(ctx, c.owner, c.repo, commentID, reactionID); err != nil {
+		c.logger.Error().Err(err).Msgf("Failed to remove reaction %d from comment %d", reactionID, commentID)
+		return err
+	}
+	return nil
+}
+
 func (c *GithubCommenter) reactToPR(ctx context.Context, prNumber int, emoji string) error {
 	if emoji == "" {
 		emoji = "rocket"
