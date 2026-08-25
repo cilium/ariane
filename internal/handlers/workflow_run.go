@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cilium/ariane/internal/config"
 	"github.com/cilium/ariane/internal/log"
@@ -19,6 +20,7 @@ import (
 
 type WorkflowRunHandler struct {
 	githubapp.ClientCreator
+	RunDelay time.Duration
 }
 
 func (*WorkflowRunHandler) Handles() []string {
@@ -190,6 +192,7 @@ func (w *WorkflowRunHandler) handleSuccessfulRun(
 		repo:         repositoryName,
 		arianeConfig: arianeConfig,
 		logger:       logger,
+		runDelay:     w.RunDelay,
 	}
 
 	return multierr.Combine(

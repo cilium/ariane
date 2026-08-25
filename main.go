@@ -55,7 +55,10 @@ func main() {
 		MaxRetryAttempts: serverConfig.Client.MaxRetryAttempts,
 	}
 	mergeGroupHandler := &handlers.MergeGroupHandler{ClientCreator: cc}
-	workflowRunHandler := &handlers.WorkflowRunHandler{ClientCreator: cc}
+	workflowRunHandler := &handlers.WorkflowRunHandler{
+		ClientCreator: cc,
+		RunDelay:      serverConfig.Client.RunDelay,
+	}
 	pullRequestHandler := &handlers.PullRequestHandler{
 		ClientCreator:    cc,
 		RunDelay:         serverConfig.Client.RunDelay,
