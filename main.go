@@ -72,6 +72,7 @@ func main() {
 		ClientCreator:    cc,
 		RunDelay:         serverConfig.Client.RunDelay,
 		MaxRetryAttempts: serverConfig.Client.MaxRetryAttempts,
+		AppBotLogin:      appBotLogin,
 	}
 
 	// Use AsyncScheduler to process webhooks asynchronously
