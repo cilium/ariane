@@ -27,6 +27,9 @@ type WorkflowProcessor struct {
 	repo         string
 	logger       zerolog.Logger
 	runDelay     time.Duration
+	// appBotLogin is Ariane's own bot login, used to recognize the reactions it left on
+	// deferred commands. Only set where deferred commands are consumed.
+	appBotLogin string
 }
 
 func (w *WorkflowProcessor) processWorkflow(
@@ -416,6 +419,20 @@ func (w *WorkflowProcessor) findRequestedCommands(ctx context.Context, prNumber 
 	return commands, nil
 }
 
+// pendingTriggerMarker returns the ID of the pending marker Ariane left on the comment,
+// or 0 if the command is not awaiting its dependencies.
+func (w *WorkflowProcessor) pendingTriggerMarker(ctx context.Context, commenter *GithubCommenter, comment *github.IssueComment) (int64, error) {
+	// The comment listing carries a summary of the reactions on each comment. When it
+	// says there is no thumbs up at all, no marker can be there and the lookup that
+	// would say so is not worth a request. An absent summary proves nothing, so the
+	// lookup still decides.
+	if reactions := comment.GetReactions(); reactions != nil && reactions.GetPlusOne() == 0 {
+		return 0, nil
+	}
+
+	return commenter.findReaction(ctx, comment.GetID(), pendingTriggerReaction, w.appBotLogin)
+}
+
 // processDependantWorkflows dispatches the commands requested on the pull request within
 // the last commentSince whose trigger depends on the completed workflow run, once every
 // one of that trigger's dependencies is satisfied.
@@ -464,12 +481,37 @@ nextTrigger:
 			}
 		}
 
+		// The command is only awaiting its dependencies if Ariane deferred it, which it
+		// records by reacting to the comment. Without that marker the command was either
+		// already dispatched or never accepted, and must not be dispatched now.
+		commenter := NewGithubCommenter(w.client, w.owner, w.repo, w.logger)
+		reactionID, err := w.pendingTriggerMarker(ctx, commenter, command.comment)
+		if err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to look up the pending marker on comment %d", command.comment.GetID())
+			continue
+		}
+		if reactionID == 0 {
+			w.logger.Debug().Msgf("Comment %d carries no pending marker, not dispatching trigger '%s'", command.comment.GetID(), triggerPhrase)
+			continue
+		}
+
 		w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, dispatching the workflows requested in comment %d on PR #%d", triggerPhrase, command.comment.GetID(), prNumber)
 
 		contextRef, headSHA, baseSHA := determineContextRef(pullRequest, w.owner, w.repo, w.logger)
-		commenter := NewGithubCommenter(w.client, w.owner, w.repo, w.logger)
 		if err := w.processWorkflowsForTrigger(ctx, command.submatch, prNumber, contextRef, headSHA, baseSHA, trigger.Workflows, trigger.DependsOn, commenter); err != nil {
+			// Leave the marker in place so that the command is retried when the next
+			// dependency run completes, rather than being silently dropped.
 			w.logger.Error().Err(err).Msgf("Failed to dispatch workflows for trigger '%s' on PR #%d", triggerPhrase, prNumber)
+			continue
+		}
+
+		// The command has been acted on: consume the marker so it is not dispatched twice,
+		// and record on the comment that it went through.
+		if err := commenter.removeReaction(ctx, command.comment.GetID(), reactionID); err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to remove the pending marker from comment %d", command.comment.GetID())
+		}
+		if err := commenter.reactToComment(ctx, command.comment.GetID(), "rocket"); err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to react to comment %d", command.comment.GetID())
 		}
 	}
 

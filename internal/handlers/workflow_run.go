@@ -21,6 +21,9 @@ import (
 type WorkflowRunHandler struct {
 	githubapp.ClientCreator
 	RunDelay time.Duration
+	// AppBotLogin is Ariane's own bot login, used to recognize the reactions it left on
+	// deferred commands.
+	AppBotLogin string
 }
 
 func (*WorkflowRunHandler) Handles() []string {
@@ -193,6 +196,7 @@ func (w *WorkflowRunHandler) handleSuccessfulRun(
 		arianeConfig: arianeConfig,
 		logger:       logger,
 		runDelay:     w.RunDelay,
+		appBotLogin:  w.AppBotLogin,
 	}
 
 	return multierr.Combine(

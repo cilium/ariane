@@ -747,28 +747,48 @@ stages-config:
 }
 
 func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
+	// deferredComment is a command Ariane deferred: the reaction summary the comment
+	// listing carries reports the pending marker, which the reaction lookup then
+	// attributes to Ariane.
+	deferredComment := func(body string) github.IssueComment {
+		return github.IssueComment{
+			ID:        github.Ptr[int64](55),
+			Body:      github.Ptr(body),
+			CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+			Reactions: &github.Reactions{PlusOne: github.Ptr(1)},
+		}
+	}
+
 	testCases := []struct {
 		name          string
 		comments      []github.IssueComment
+		pendingMarker bool
 		shouldTrigger bool
 	}{
-		{name: "no previous comments", comments: []github.IssueComment{}, shouldTrigger: false},
+		{name: "no previous comments", comments: []github.IssueComment{}, pendingMarker: true, shouldTrigger: false},
 		{name: "previous comment in proper time window",
-			comments: []github.IssueComment{
-				{
-					Body:      github.Ptr("/test"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
-				},
-			},
+			comments:      []github.IssueComment{deferredComment("/test")},
+			pendingMarker: true,
 			shouldTrigger: true,
 		},
 		{name: "previous comment does not match a trigger on its own",
-			comments: []github.IssueComment{
-				{
-					Body:      github.Ptr("please /test once this is green"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
-				},
-			},
+			comments:      []github.IssueComment{deferredComment("please /test once this is green")},
+			pendingMarker: true,
+			shouldTrigger: false,
+		},
+		{name: "previous comment was never deferred",
+			comments:      []github.IssueComment{deferredComment("/test")},
+			pendingMarker: false,
+			shouldTrigger: false,
+		},
+		{name: "previous comment carries no thumbs up at all",
+			comments: []github.IssueComment{{
+				ID:        github.Ptr[int64](55),
+				Body:      github.Ptr("/test"),
+				CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+				Reactions: &github.Reactions{PlusOne: github.Ptr(0)},
+			}},
+			pendingMarker: true,
 			shouldTrigger: false,
 		},
 	}
@@ -782,6 +802,9 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			defer server.Close()
 
 			workflowDispatched := false
+			pendingMarkerRemoved := false
+			dispatchReactionAdded := false
+			reactionsListed := false
 			var listedWorkflows []string
 
 			// Mock PR endpoint
@@ -847,6 +870,33 @@ triggers:
 				_ = json.NewEncoder(w).Encode(runs)
 			})
 
+			// Mock the pending marker Ariane left on the deferred command
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					var reaction github.Reaction
+					_ = json.NewDecoder(r.Body).Decode(&reaction)
+					assert.Equal(t, "rocket", reaction.GetContent())
+					dispatchReactionAdded = true
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(&github.Reaction{ID: github.Ptr[int64](100)})
+					return
+				}
+				reactionsListed = true
+				reactions := []*github.Reaction{}
+				if tc.pendingMarker {
+					reactions = append(reactions, &github.Reaction{
+						ID:   github.Ptr[int64](99),
+						User: &github.User{Login: github.Ptr(testAppBotLogin)},
+					})
+				}
+				_ = json.NewEncoder(w).Encode(reactions)
+			})
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions/99", func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodDelete, r.Method)
+				pendingMarkerRemoved = true
+				w.WriteHeader(http.StatusNoContent)
+			})
+
 			// Mock comment listing endpoint. Ariane must no longer post the command itself.
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
@@ -870,6 +920,7 @@ triggers:
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
+				AppBotLogin:   testAppBotLogin,
 			}
 
 			payload := []byte(`{
@@ -903,8 +954,14 @@ triggers:
 			if tc.shouldTrigger {
 				assert.True(t, workflowDispatched, "Workflow should have been dispatched for case: %s", tc.name)
 				assert.Contains(t, listedWorkflows, "dependency.yaml", "the dependency should be checked")
+				assert.True(t, pendingMarkerRemoved, "The pending marker should have been consumed for case: %s", tc.name)
+				assert.True(t, dispatchReactionAdded, "The comment should have been marked as dispatched for case: %s", tc.name)
 			} else {
 				assert.False(t, workflowDispatched, "Workflow should not have been dispatched for case: %s", tc.name)
+				assert.False(t, pendingMarkerRemoved, "The pending marker should have been left in place for case: %s", tc.name)
+			}
+			if tc.name == "previous comment carries no thumbs up at all" {
+				assert.False(t, reactionsListed, "A comment with no thumbs up should not cost a reaction lookup")
 			}
 		}()
 	}
@@ -1013,6 +1070,20 @@ triggers:
 				_ = json.NewEncoder(w).Encode(runs)
 			})
 
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(&github.Reaction{ID: github.Ptr[int64](100)})
+					return
+				}
+				_ = json.NewEncoder(w).Encode([]*github.Reaction{
+					{ID: github.Ptr[int64](99), User: &github.User{Login: github.Ptr(testAppBotLogin)}},
+				})
+			})
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions/99", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			})
+
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
 					assert.Fail(t, "the command must be dispatched directly, not commented again")
@@ -1021,8 +1092,10 @@ triggers:
 				} else {
 					_ = json.NewEncoder(w).Encode([]github.IssueComment{
 						{
+							ID:        github.Ptr[int64](55),
 							Body:      github.Ptr("/test"),
 							CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+							Reactions: &github.Reactions{PlusOne: github.Ptr(1)},
 						},
 					})
 				}
@@ -1040,6 +1113,7 @@ triggers:
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
+				AppBotLogin:   testAppBotLogin,
 			}
 
 			payload := []byte(`{

@@ -10,6 +10,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// pendingTriggerReaction marks a command whose dependencies were not met when it was
+// requested. The issue_comment handler adds it when it defers the command, and the
+// workflow_run handler consumes it once the dependencies complete. It is Ariane's record
+// that the command is still awaited, so it must be removed as soon as it is acted on.
+const pendingTriggerReaction = "+1"
+
 type GithubCommenter struct {
 	client *github.Client
 	owner  string
