@@ -85,6 +85,7 @@ Github workflow builds a docker image and pushes it to Google Artifact Registry 
   - Subscribe to events:
     - Issue comment
     - Merge group
+    - Pull request
 - Install the app to your account and give it access to your test repository (e.g. your fork of Cilium).
 
 ### Testing
