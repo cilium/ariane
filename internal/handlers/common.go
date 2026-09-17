@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/ariane/internal/config"
 	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
+	"github.com/shurcooL/githubv4"
 )
 
 func rerunFailedJobs(ctx context.Context, client *github.Client, owner, repo string, runID int64, workflowName string, logger zerolog.Logger) error {
@@ -154,4 +155,17 @@ func isAllowedTeamMember(ctx context.Context, client *github.Client, config *con
 		return true
 	}
 	return false
+}
+
+func minimizeComment(ctx context.Context, clientV4 *githubv4.Client, comment *github.IssueComment) error {
+	input := githubv4.MinimizeCommentInput{
+		SubjectID:  comment.GetNodeID(),
+		Classifier: githubv4.ReportedContentClassifiersOutdated,
+	}
+	var mutation struct {
+		MinimizeComment struct {
+			ClientMutationID githubv4.String
+		} `graphql:"minimizeComment(input: $input)"`
+	}
+	return clientV4.Mutate(ctx, &mutation, input, nil)
 }
