@@ -12,12 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilium/ariane/internal/config"
+	"github.com/cilium/ariane/internal/log"
 	"github.com/google/go-github/v88/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
-
-	"github.com/cilium/ariane/internal/config"
-	"github.com/cilium/ariane/internal/log"
 )
 
 var configGetArianeConfigFromRepository = config.GetArianeConfigFromRepository
@@ -72,6 +71,11 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 	}
 
 	client, err := h.NewInstallationClient(installationID)
+	if err != nil {
+		return err
+	}
+
+	clientV4, err := h.NewInstallationV4Client(installationID)
 	if err != nil {
 		return err
 	}
@@ -185,6 +189,11 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 
 	if err := commenter.reactToComment(ctx, commentID, "rocket"); err != nil {
 		return err
+	}
+
+	err = minimizeComment(ctx, clientV4, event.GetComment())
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to minimize comment")
 	}
 
 	return nil

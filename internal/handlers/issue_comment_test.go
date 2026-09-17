@@ -108,6 +108,7 @@ func TestHandle_IsInvalidBot(t *testing.T) {
 	defer mockServer.Close()
 	mockURL := github.Ptr(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -115,6 +116,7 @@ func TestHandle_IsInvalidBot(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -156,6 +158,7 @@ func TestHandle_IsValidBot(t *testing.T) {
 	defer mockServer.Close()
 	mockURL := github.Ptr(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -163,6 +166,7 @@ func TestHandle_IsValidBot(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -204,6 +208,7 @@ func TestHandle(t *testing.T) {
 	defer mockServer.Close()
 	mockURL := github.Ptr(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -211,6 +216,7 @@ func TestHandle(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -794,6 +800,7 @@ func TestHandle_WorkflowStatusTable(t *testing.T) {
 	defer mockServer.Close()
 	mockURL := github.Ptr(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -801,6 +808,7 @@ func TestHandle_WorkflowStatusTable(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -1024,10 +1032,12 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 
 	mockURL := github.Ptr(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -1083,10 +1093,12 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 
 	mockURL := github.Ptr(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -1142,10 +1154,12 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 
 	mockURL := github.Ptr(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -1202,10 +1216,12 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 
 	mockURL := github.Ptr(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -1256,10 +1272,12 @@ func TestHandle_WorkflowsDependencyRunningReaction(t *testing.T) {
 
 	mockURL := github.Ptr(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
@@ -1311,10 +1329,12 @@ func TestHandle_WorkflowsDependencyFailedReaction(t *testing.T) {
 
 	mockURL := github.Ptr(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
 	mockClientCreator.EXPECT().NewInstallationClient(int64(0)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(0)).Return(clientV4, nil)
 
 	handler := &PRCommentHandler{
 		ClientCreator:    mockClientCreator,
