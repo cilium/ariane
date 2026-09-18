@@ -747,20 +747,49 @@ stages-config:
 }
 
 func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
+	// deferredComment is a command Ariane deferred: the reaction summary the comment
+	// listing carries reports the pending marker, which the reaction lookup then
+	// attributes to Ariane.
+	deferredComment := func(body string) github.IssueComment {
+		return github.IssueComment{
+			ID:        github.Ptr[int64](55),
+			Body:      github.Ptr(body),
+			CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+			Reactions: &github.Reactions{PlusOne: github.Ptr(1)},
+		}
+	}
+
 	testCases := []struct {
 		name          string
 		comments      []github.IssueComment
+		pendingMarker bool
 		shouldTrigger bool
 	}{
-		{name: "no previous comments", comments: []github.IssueComment{}, shouldTrigger: false},
+		{name: "no previous comments", comments: []github.IssueComment{}, pendingMarker: true, shouldTrigger: false},
 		{name: "previous comment in proper time window",
-			comments: []github.IssueComment{
-				{
-					Body:      github.Ptr("/test"),
-					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
-				},
-			},
+			comments:      []github.IssueComment{deferredComment("/test")},
+			pendingMarker: true,
 			shouldTrigger: true,
+		},
+		{name: "previous comment does not match a trigger on its own",
+			comments:      []github.IssueComment{deferredComment("please /test once this is green")},
+			pendingMarker: true,
+			shouldTrigger: false,
+		},
+		{name: "previous comment was never deferred",
+			comments:      []github.IssueComment{deferredComment("/test")},
+			pendingMarker: false,
+			shouldTrigger: false,
+		},
+		{name: "previous comment carries no thumbs up at all",
+			comments: []github.IssueComment{{
+				ID:        github.Ptr[int64](55),
+				Body:      github.Ptr("/test"),
+				CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+				Reactions: &github.Reactions{PlusOne: github.Ptr(0)},
+			}},
+			pendingMarker: true,
+			shouldTrigger: false,
 		},
 	}
 	// we are not testing the comment being too old because GH API filtering ensures that we won't get those comments at all
@@ -772,7 +801,10 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			commentPosted := false
+			workflowDispatched := false
+			pendingMarkerRemoved := false
+			dispatchReactionAdded := false
+			reactionsListed := false
 			var listedWorkflows []string
 
 			// Mock PR endpoint
@@ -790,6 +822,21 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
+			})
+
+			// Mock PR files endpoint, so that the triggered workflows are not skipped
+			mux.HandleFunc("/repos/owner/repo/pulls/1/files", func(w http.ResponseWriter, r *http.Request) {
+				files := []*github.CommitFile{{Filename: github.Ptr("main.go")}}
+				_ = json.NewEncoder(w).Encode(files)
+			})
+
+			// Mock the triggered workflow: no previous run, and record the dispatch
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(&github.WorkflowRuns{TotalCount: github.Ptr(0)})
+			})
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/dispatches", func(w http.ResponseWriter, r *http.Request) {
+				workflowDispatched = true
+				w.WriteHeader(http.StatusNoContent)
 			})
 
 			// Mock config file endpoint with two workflows in the same stage
@@ -823,13 +870,37 @@ triggers:
 				_ = json.NewEncoder(w).Encode(runs)
 			})
 
-			// Mock comment creation endpoint
+			// Mock the pending marker Ariane left on the deferred command
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					var reaction github.Reaction
+					_ = json.NewDecoder(r.Body).Decode(&reaction)
+					assert.Equal(t, "rocket", reaction.GetContent())
+					dispatchReactionAdded = true
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(&github.Reaction{ID: github.Ptr[int64](100)})
+					return
+				}
+				reactionsListed = true
+				reactions := []*github.Reaction{}
+				if tc.pendingMarker {
+					reactions = append(reactions, &github.Reaction{
+						ID:   github.Ptr[int64](99),
+						User: &github.User{Login: github.Ptr(testAppBotLogin)},
+					})
+				}
+				_ = json.NewEncoder(w).Encode(reactions)
+			})
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions/99", func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodDelete, r.Method)
+				pendingMarkerRemoved = true
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			// Mock comment listing endpoint. Ariane must no longer post the command itself.
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
-					var comment github.IssueComment
-					_ = json.NewDecoder(r.Body).Decode(&comment)
-					assert.Equal(t, "/test", comment.GetBody())
-					commentPosted = true
+					assert.Fail(t, "the command must be dispatched directly, not commented again")
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
 				} else {
@@ -849,6 +920,7 @@ triggers:
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
+				AppBotLogin:   testAppBotLogin,
 			}
 
 			payload := []byte(`{
@@ -880,11 +952,17 @@ triggers:
 			err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 			assert.NoError(t, err)
 			if tc.shouldTrigger {
-				assert.True(t, commentPosted, "Comment should have been posted for case: %s", tc.name)
+				assert.True(t, workflowDispatched, "Workflow should have been dispatched for case: %s", tc.name)
+				assert.Contains(t, listedWorkflows, "dependency.yaml", "the dependency should be checked")
+				assert.True(t, pendingMarkerRemoved, "The pending marker should have been consumed for case: %s", tc.name)
+				assert.True(t, dispatchReactionAdded, "The comment should have been marked as dispatched for case: %s", tc.name)
 			} else {
-				assert.False(t, commentPosted, "Comment should not have been posted for case: %s", tc.name)
+				assert.False(t, workflowDispatched, "Workflow should not have been dispatched for case: %s", tc.name)
+				assert.False(t, pendingMarkerRemoved, "The pending marker should have been left in place for case: %s", tc.name)
 			}
-			assert.ElementsMatch(t, []string{"dependency.yaml"}, listedWorkflows, "both workflows should be checked")
+			if tc.name == "previous comment carries no thumbs up at all" {
+				assert.False(t, reactionsListed, "A comment with no thumbs up should not cost a reaction lookup")
+			}
 		}()
 	}
 }
@@ -893,28 +971,24 @@ triggers:
 // one of them must not post the command until every dependency is satisfied.
 func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		secondDependencyRun  github.WorkflowRun
-		shouldTrigger        bool
-		expectedListedChecks []string
+		name                string
+		secondDependencyRun github.WorkflowRun
+		shouldTrigger       bool
 	}{
 		{
-			name:                 "second dependency still in progress",
-			secondDependencyRun:  github.WorkflowRun{Status: github.Ptr("in_progress")},
-			shouldTrigger:        false,
-			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
+			name:                "second dependency still in progress",
+			secondDependencyRun: github.WorkflowRun{Status: github.Ptr("in_progress")},
+			shouldTrigger:       false,
 		},
 		{
-			name:                 "second dependency failed",
-			secondDependencyRun:  github.WorkflowRun{Status: github.Ptr("completed"), Conclusion: github.Ptr("failure")},
-			shouldTrigger:        false,
-			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
+			name:                "second dependency failed",
+			secondDependencyRun: github.WorkflowRun{Status: github.Ptr("completed"), Conclusion: github.Ptr("failure")},
+			shouldTrigger:       false,
 		},
 		{
-			name:                 "all dependencies satisfied",
-			secondDependencyRun:  github.WorkflowRun{Status: github.Ptr("completed"), Conclusion: github.Ptr("success")},
-			shouldTrigger:        true,
-			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
+			name:                "all dependencies satisfied",
+			secondDependencyRun: github.WorkflowRun{Status: github.Ptr("completed"), Conclusion: github.Ptr("success")},
+			shouldTrigger:       true,
 		},
 	}
 
@@ -924,7 +998,7 @@ func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			commentPosted := false
+			workflowDispatched := false
 			var listedWorkflows []string
 
 			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
@@ -938,6 +1012,19 @@ func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
+			})
+
+			mux.HandleFunc("/repos/owner/repo/pulls/1/files", func(w http.ResponseWriter, r *http.Request) {
+				files := []*github.CommitFile{{Filename: github.Ptr("main.go")}}
+				_ = json.NewEncoder(w).Encode(files)
+			})
+
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(&github.WorkflowRuns{TotalCount: github.Ptr(0)})
+			})
+			mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/dispatches", func(w http.ResponseWriter, r *http.Request) {
+				workflowDispatched = true
+				w.WriteHeader(http.StatusNoContent)
 			})
 
 			mux.HandleFunc("/repos/owner/repo/contents/.github/ariane-config.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -983,19 +1070,32 @@ triggers:
 				_ = json.NewEncoder(w).Encode(runs)
 			})
 
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(&github.Reaction{ID: github.Ptr[int64](100)})
+					return
+				}
+				_ = json.NewEncoder(w).Encode([]*github.Reaction{
+					{ID: github.Ptr[int64](99), User: &github.User{Login: github.Ptr(testAppBotLogin)}},
+				})
+			})
+			mux.HandleFunc("/repos/owner/repo/issues/comments/55/reactions/99", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			})
+
 			mux.HandleFunc("/repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
-					var comment github.IssueComment
-					_ = json.NewDecoder(r.Body).Decode(&comment)
-					assert.Equal(t, "/test", comment.GetBody())
-					commentPosted = true
+					assert.Fail(t, "the command must be dispatched directly, not commented again")
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
 				} else {
 					_ = json.NewEncoder(w).Encode([]github.IssueComment{
 						{
+							ID:        github.Ptr[int64](55),
 							Body:      github.Ptr("/test"),
 							CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+							Reactions: &github.Reactions{PlusOne: github.Ptr(1)},
 						},
 					})
 				}
@@ -1013,6 +1113,7 @@ triggers:
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
+				AppBotLogin:   testAppBotLogin,
 			}
 
 			payload := []byte(`{
@@ -1044,11 +1145,12 @@ triggers:
 			err = handler.Handle(context.Background(), "workflow_run", "deliveryID", payload)
 			assert.NoError(t, err)
 			if tc.shouldTrigger {
-				assert.True(t, commentPosted, "Comment should have been posted for case: %s", tc.name)
+				assert.True(t, workflowDispatched, "Workflow should have been dispatched for case: %s", tc.name)
 			} else {
-				assert.False(t, commentPosted, "Comment should not have been posted for case: %s", tc.name)
+				assert.False(t, workflowDispatched, "Workflow should not have been dispatched for case: %s", tc.name)
 			}
-			assert.ElementsMatch(t, tc.expectedListedChecks, listedWorkflows, "all dependencies should be checked for case: %s", tc.name)
+			assert.Contains(t, listedWorkflows, "dependency-a.yaml", "for case: %s", tc.name)
+			assert.Contains(t, listedWorkflows, "dependency-b.yaml", "for case: %s", tc.name)
 		}()
 	}
 }

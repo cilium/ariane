@@ -49,6 +49,14 @@ func main() {
 		panic(err)
 	}
 
+	// Ariane recognizes the reactions it left on deferred commands by its own bot login.
+	// It is a property of the app and never changes while the process runs, so it is
+	// resolved once here rather than on every event.
+	appBotLogin, err := handlers.ResolveAppBotLogin(context.Background(), cc)
+	if err != nil {
+		panic(err)
+	}
+
 	prCommentHandler := &handlers.PRCommentHandler{
 		ClientCreator:    cc,
 		RunDelay:         serverConfig.Client.RunDelay,
@@ -58,11 +66,13 @@ func main() {
 	workflowRunHandler := &handlers.WorkflowRunHandler{
 		ClientCreator: cc,
 		RunDelay:      serverConfig.Client.RunDelay,
+		AppBotLogin:   appBotLogin,
 	}
 	pullRequestHandler := &handlers.PullRequestHandler{
 		ClientCreator:    cc,
 		RunDelay:         serverConfig.Client.RunDelay,
 		MaxRetryAttempts: serverConfig.Client.MaxRetryAttempts,
+		AppBotLogin:      appBotLogin,
 	}
 
 	// Use AsyncScheduler to process webhooks asynchronously

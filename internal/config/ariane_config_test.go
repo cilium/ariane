@@ -98,6 +98,41 @@ func Test_CheckForTrigger(t *testing.T) {
 	}
 }
 
+// MatchTrigger reports which trigger a comment requests, which callers that hold a
+// trigger phrase of their own need in order to confirm the two agree.
+func Test_MatchTrigger(t *testing.T) {
+	logger := zerolog.New(os.Stdout)
+	ctx := log.WithLogger(context.Background(), &logger)
+	arianeConfig := config.ArianeConfig{
+		Triggers: map[string]config.TriggerConfig{
+			`/test`:           {Workflows: []string{"test.yaml"}, DependsOn: []string{"/dependency"}},
+			`/test-foo( .*)?`: {Workflows: []string{"test-foo.yaml"}},
+			`/dependency`:     {Workflows: []string{"dependency.yaml"}},
+		},
+	}
+
+	cases := []struct {
+		comment          string
+		expectedPhrase   string
+		expectedSubmatch []string
+	}{
+		// A phrase that is a prefix of another must not claim the longer command.
+		{comment: "/test", expectedPhrase: `/test`, expectedSubmatch: []string{"/test"}},
+		{comment: "/test-foo", expectedPhrase: `/test-foo( .*)?`, expectedSubmatch: []string{"/test-foo", ""}},
+		{comment: "/test-foo bar", expectedPhrase: `/test-foo( .*)?`, expectedSubmatch: []string{"/test-foo bar", " bar"}},
+		// The regex is anchored: a comment merely containing a command requests nothing.
+		{comment: "please /test once this is green"},
+	}
+	for _, tt := range cases {
+		phrase, submatch, trigger, ok := arianeConfig.MatchTrigger(ctx, tt.comment)
+
+		assert.Equal(t, tt.expectedPhrase != "", ok, "for comment: %q", tt.comment)
+		assert.Equal(t, tt.expectedPhrase, phrase, "for comment: %q", tt.comment)
+		assert.Equal(t, tt.expectedSubmatch, submatch, "for comment: %q", tt.comment)
+		assert.Equal(t, arianeConfig.Triggers[tt.expectedPhrase], trigger, "for comment: %q", tt.comment)
+	}
+}
+
 func TestArianeConfigMerge(t *testing.T) {
 	cases := []struct {
 		config       *config.ArianeConfig
