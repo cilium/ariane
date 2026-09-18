@@ -82,6 +82,7 @@ jobs:
             ARIANE_MAX_RETRY_ATTEMPTS: 3
             ARIANE_RUN_DELAY: 30s
             GITHUB_V3_API_URL: ${{ vars.GH_V3_API_URL }}
+            GITHUB_V4_API_URL: ${{ vars.GH_V4_API_URL }}
             GITHUB_APP_INTEGRATION_ID: ${{ secrets.GH_APP_INTEGRATION_ID }}
             GITHUB_APP_WEBHOOK_SECRET: ${{ secrets.GH_APP_WEBHOOK_SECRET }}
             GITHUB_APP_PRIVATE_KEY: ${GH_APP_PRIVATE_KEY_ESCAPED}
