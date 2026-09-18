@@ -18,7 +18,7 @@ permissions:
 jobs:
   check-for-changes:
     name: Check for changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       result: ${{ steps.check-commits.outputs.result }}
     steps:
@@ -59,7 +59,7 @@ jobs:
       group: ${{ github.workflow }}
     name: Build and deploy to GCP
     environment: production
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
