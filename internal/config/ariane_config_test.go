@@ -586,6 +586,41 @@ func TestGetVerbose(t *testing.T) {
 	}
 }
 
+func TestGetReactions(t *testing.T) {
+	testCases := []struct {
+		name           string
+		yamlConfig     string
+		expectedResult bool
+	}{
+		{
+			name:           "Feedback omitted",
+			yamlConfig:     "triggers: {}",
+			expectedResult: true,
+		},
+		{
+			name: "Reactions disabled",
+			yamlConfig: `feedback:
+  reactions: false`,
+			expectedResult: false,
+		},
+		{
+			name: "Reactions enabled",
+			yamlConfig: `feedback:
+  reactions: true`,
+			expectedResult: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var arianeConfig config.ArianeConfig
+			err := yaml.Unmarshal([]byte(testCase.yamlConfig), &arianeConfig)
+			assert.NoError(t, err)
+			assert.Equal(t, testCase.expectedResult, arianeConfig.GetReactions())
+		})
+	}
+}
+
 func TestGetWorkflowsReport(t *testing.T) {
 	testCases := []struct {
 		name           string
