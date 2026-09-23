@@ -11,19 +11,25 @@ import (
 )
 
 type GithubCommenter struct {
-	client *github.Client
-	owner  string
-	repo   string
-	logger zerolog.Logger
+	client           *github.Client
+	owner            string
+	repo             string
+	logger           zerolog.Logger
+	reactionsEnabled bool
 }
 
 func NewGithubCommenter(client *github.Client, owner, repo string, logger zerolog.Logger) *GithubCommenter {
 	return &GithubCommenter{
-		client: client,
-		owner:  owner,
-		repo:   repo,
-		logger: logger,
+		client:           client,
+		owner:            owner,
+		repo:             repo,
+		logger:           logger,
+		reactionsEnabled: true,
 	}
+}
+
+func (c *GithubCommenter) setReactionsEnabled(isEnabled bool) {
+	c.reactionsEnabled = isEnabled
 }
 
 func (c *GithubCommenter) commentOnPullRequest(ctx context.Context, prNumber int, replyBody string) error {
@@ -39,6 +45,9 @@ func (c *GithubCommenter) commentOnPullRequest(ctx context.Context, prNumber int
 }
 
 func (c *GithubCommenter) reactToComment(ctx context.Context, commentID int64, emoji string) error {
+	if !c.reactionsEnabled {
+		return nil
+	}
 	if emoji == "" {
 		emoji = "rocket"
 	}
@@ -50,6 +59,9 @@ func (c *GithubCommenter) reactToComment(ctx context.Context, commentID int64, e
 }
 
 func (c *GithubCommenter) reactToPR(ctx context.Context, prNumber int, emoji string) error {
+	if !c.reactionsEnabled {
+		return nil
+	}
 	if emoji == "" {
 		emoji = "rocket"
 	}
