@@ -34,6 +34,8 @@ type ArianeConfig struct {
 type FeedbackConfig struct {
 	// Whether to log verbose feedback
 	Verbose *bool `yaml:"verbose,omitempty"`
+	// Whether to react to comments and pull request descriptions
+	Reactions *bool `yaml:"reactions,omitempty"`
 	// Whether to report on workflows triggered by ariane
 	WorkflowsReport *bool `yaml:"workflows-report,omitempty"`
 	// Whether to report on all workflows (incl. successful and skipped ones
@@ -117,6 +119,13 @@ func (c *ArianeConfig) GetVerbose() bool {
 		return false
 	}
 	return *c.Feedback.Verbose
+}
+
+func (c *ArianeConfig) GetReactions() bool {
+	if c.Feedback.Reactions == nil {
+		return true
+	}
+	return *c.Feedback.Reactions
 }
 
 func (c *ArianeConfig) GetWorkflowsReport() bool {
@@ -296,6 +305,9 @@ func (config *ArianeConfig) Merge(other *ArianeConfig) *ArianeConfig {
 	// Merge feedback configuration
 	if other.Feedback.Verbose != nil {
 		config.Feedback.Verbose = other.Feedback.Verbose
+	}
+	if other.Feedback.Reactions != nil {
+		config.Feedback.Reactions = other.Feedback.Reactions
 	}
 	if other.Feedback.WorkflowsReport != nil {
 		config.Feedback.WorkflowsReport = other.Feedback.WorkflowsReport

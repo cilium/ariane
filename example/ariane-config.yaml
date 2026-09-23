@@ -26,6 +26,7 @@ workflows:
 
 feedback:
   verbose: true
+  reactions: true
   workflows-report: true
   report-all-workflows: true
 
