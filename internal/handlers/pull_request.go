@@ -101,6 +101,7 @@ func (p *PullRequestHandler) Handle(ctx context.Context, eventType, deliveryID s
 		_ = commenter.commentOnPullRequest(ctx, prNumber, comment)
 		return err
 	}
+	commenter.setReactionsEnabled(arianeConfig.GetReactions())
 
 	// only handle comments coming from an allowed organization, if specified
 	if !botUser && !isAllowedTeamMember(ctx, client, arianeConfig, repositoryOwner, author, logger) {
