@@ -10,6 +10,7 @@ var (
 	ErrEdgeAlreadyExists  = errors.New("edge already exists")
 	ErrDAGCycle           = errors.New("edges would create cycle")
 	ErrDAGHasCycle        = errors.New("the graph contains a cycle")
+	ErrNotDirected        = errors.New("graph is not directed")
 )
 
 // Graph defines methods for managing a graph with vertices and edges. It is the
@@ -28,13 +29,14 @@ type Graph[T comparable] interface {
 	// the 'to' label to the vertex with the 'from' label by appending
 	// the 'from' vertex to the 'neighbors' slice of the 'to' vertex. it
 	// means that it create the edges in both direction between the specified
-	// vertices.
+	// vertices. A self-loop is stored once.
 	//
 	// This method accepts additional edge options such as weight and adds
 	// them to the new edge.
 	//
 	//
-	// It creates the input vertices if they don't exist in the graph.
+	// It creates the input vertices if they don't exist in the graph, the
+	// same way AddVertex does, so a vertex from another graph is copied.
 	// If any of the specified vertices is nil, returns nil.
 	// If edge already exist, returns error.
 	AddEdge(from, to *Vertex[T], options ...EdgeOptionFunc) (*Edge[T], error)
@@ -42,14 +44,18 @@ type Graph[T comparable] interface {
 	// GetAllEdges returns a slice of all edges connecting source vertex to
 	// target vertex if such vertices exist in this graph.
 	//
-	// In directed graph, it returns a single edge.
+	// In directed graph, or if both vertices are the same, it returns a single edge.
 	//
 	// If any of the specified vertices is nil, returns nil.
 	// If any of the vertices does not exist, returns nil.
 	// If both vertices exist but no edges found, returns an empty set.
 	GetAllEdges(from, to *Vertex[T]) []*Edge[T]
 
-	// AllEdges returns all the edges in the graph.
+	// AllEdges returns all the edges in the graph. The edges are grouped by
+	// source vertex in the order of GetAllVertices, and the edges of each
+	// source vertex are in the order they were added. In an undirected
+	// graph, each edge is stored in both directions, so it appears in the
+	// group of both its vertices.
 	AllEdges() []*Edge[T]
 
 	// GetEdge returns an edge connecting source vertex to target vertex
@@ -64,6 +70,10 @@ type Graph[T comparable] interface {
 
 	// EdgesOf returns a slice of all edges touching the specified vertex.
 	// If no edges are touching the specified vertex returns an empty slice.
+	//
+	// The edges that start from the vertex come first, in the order they
+	// were added. The edges that end at the vertex follow, in the order of
+	// their source vertices in GetAllVertices.
 	//
 	// If the input vertex is nil, returns nil.
 	// If the input vertex does not exist, returns nil.
@@ -85,6 +95,10 @@ type Graph[T comparable] interface {
 	// AddVertex adds the input vertex to the graph. It doesn't add
 	// vertex to the graph if the input vertex label is already exists
 	// in the graph.
+	//
+	// A vertex belongs to one graph. If the input vertex has already been
+	// added to a graph, including this one before it was removed, the graph
+	// stores a copy with the same label, weight and metadata, and no edges.
 	AddVertex(v *Vertex[T])
 
 	// GetVertexByID returns the vertex with the input label.
@@ -97,7 +111,9 @@ type Graph[T comparable] interface {
 	// If vertex doesn't exist, doesn't add nil to the output list.
 	GetAllVerticesByID(label ...T) []*Vertex[T]
 
-	// GetAllVertices returns a slice of all existing vertices in the graph.
+	// GetAllVertices returns a slice of all existing vertices in the graph,
+	// in the order they were added. A vertex that is removed and added
+	// again moves to the end.
 	GetAllVertices() []*Vertex[T]
 
 	// RemoveVertices removes all the specified vertices from this graph including
@@ -190,11 +206,21 @@ type Vertex[T comparable] struct {
 	neighbors  []*Vertex[T] // stores pointers to its neighbors
 	inDegree   int          // number of incoming edges to this vertex
 	properties VertexProperties
-	metadata   any // optional metadata associated with the vertex
+	metadata   any  // optional metadata associated with the vertex
+	stored     bool // whether a graph has stored this vertex
+	position   int  // index of the vertex in the insertion order of its graph
 }
 
+// NewVertex creates a vertex with the given label and applies the options,
+// such as WithVertexWeight, to it. The vertex doesn't belong to a graph
+// until it's added with AddVertex or AddEdge.
 func NewVertex[T comparable](label T, options ...VertexOptionFunc) *Vertex[T] {
-	return &Vertex[T]{label: label}
+	var properties VertexProperties
+	for _, option := range options {
+		option(&properties)
+	}
+
+	return &Vertex[T]{label: label, properties: properties}
 }
 
 // NeighborByLabel iterates over the neighbor slice and returns the
@@ -213,9 +239,9 @@ func (v *Vertex[T]) NeighborByLabel(label T) *Vertex[T] {
 
 // HasNeighbor checks if the input vertex is the neighbor of the
 // current node or not. It returns 'true' if it finds the input
-// in the neighbors. Otherwise, returns 'false'.
+// in the neighbors. Otherwise, or if the input is nil, returns 'false'.
 func (v *Vertex[T]) HasNeighbor(vertex *Vertex[T]) bool {
-	return v.NeighborByLabel(vertex.label) != nil
+	return vertex != nil && v.NeighborByLabel(vertex.label) != nil
 }
 
 // InDegree returns the number of incoming edges to the current vertex.
