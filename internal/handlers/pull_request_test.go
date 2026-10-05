@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cilium/ariane/internal/config"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -22,7 +22,7 @@ func TestPRHandle_IsInvalidBot(t *testing.T) {
 
 	mockServer := setMockServerPullRequest()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -74,7 +74,7 @@ func TestPRHandle_IsValidBot(t *testing.T) {
 
 	mockServer := setMockServerPullRequest()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -126,7 +126,7 @@ func TestPRHandle_TrustedAuthor(t *testing.T) {
 
 	mockServer := setMockServerPullRequest()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -178,7 +178,7 @@ func TestPRHandle_UntrustedAuthor(t *testing.T) {
 
 	mockServer := setMockServerPullRequest()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -241,18 +241,18 @@ func setMockServerPullRequest() *httptest.Server {
 
 		}
 		pr := &github.PullRequest{
-			User:  &github.User{Login: github.Ptr(username)},
-			State: github.Ptr("open"),
+			User:  &github.User{Login: new(username)},
+			State: new("open"),
 			Head: &github.PullRequestBranch{
-				Ref: github.Ptr("pr/owner/mybugfix"),
-				SHA: github.Ptr("mock-sha"),
+				Ref: new("pr/owner/mybugfix"),
+				SHA: new("mock-sha"),
 				Repo: &github.Repository{
-					Owner: &github.User{Login: github.Ptr("owner")},
-					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: new("owner")},
+					Name:  new("repo"),
 				},
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}
 		if err := json.NewEncoder(w).Encode(pr); err != nil {
@@ -266,11 +266,11 @@ func setMockServerPullRequest() *httptest.Server {
 		switch author {
 		case "trustedauthor":
 			membership = &github.Membership{
-				State: github.Ptr("active"),
+				State: new("active"),
 			}
 		case "unknownauthor":
 			membership = &github.Membership{
-				State: github.Ptr("pending"),
+				State: new("pending"),
 			}
 		}
 
@@ -281,8 +281,8 @@ func setMockServerPullRequest() *httptest.Server {
 	mux.HandleFunc("POST /repos/owner/repo/issues/{number}/reactions", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/reactions/reactions?apiVersion=2022-11-28#create-reaction-for-an-issue-comment
 		reaction := &github.Reaction{
-			ID:      github.Ptr(int64(1)),
-			Content: github.Ptr(r.PostFormValue("content")),
+			ID:      new(int64(1)),
+			Content: new(r.PostFormValue("content")),
 		}
 		if err := json.NewEncoder(w).Encode(reaction); err != nil {
 			http.Error(w, "setMockServer: could not encode the reaction payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -291,7 +291,7 @@ func setMockServerPullRequest() *httptest.Server {
 
 	mux.HandleFunc("/repos/owner/repo/pulls/{number}/files", func(w http.ResponseWriter, r *http.Request) {
 		files := []*github.CommitFile{
-			{Filename: github.Ptr("test.go")},
+			{Filename: new("test.go")},
 		}
 		_ = json.NewEncoder(w).Encode(files)
 	})

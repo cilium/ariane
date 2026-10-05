@@ -6,7 +6,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/rs/zerolog"
 )
 
@@ -27,8 +27,8 @@ func NewGithubCommenter(client *github.Client, owner, repo string, logger zerolo
 }
 
 func (c *GithubCommenter) commentOnPullRequest(ctx context.Context, prNumber int, replyBody string) error {
-	comment := &github.IssueComment{
-		Body: github.Ptr(replyBody),
+	comment := github.IssueCommentRequest{
+		Body: replyBody,
 	}
 	_, _, err := c.client.Issues.CreateComment(ctx, c.owner, c.repo, prNumber, comment)
 	if err != nil {
