@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/cilium/ariane/internal/config"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 )
@@ -159,8 +159,8 @@ func (w *WorkflowProcessor) markWorkflowAsSkipped(ctx context.Context, workflow,
 	checkRunOptions := github.CreateCheckRunOptions{
 		Name:       githubWorkflow.GetName(),
 		HeadSHA:    SHA,
-		Status:     github.Ptr("completed"),
-		Conclusion: github.Ptr("skipped"),
+		Status:     new("completed"),
+		Conclusion: new("skipped"),
 	}
 	if _, _, err := w.client.Checks.CreateCheckRun(ctx, w.owner, w.repo, checkRunOptions); err != nil {
 		w.logger.Error().Err(err).Msg("Failed to set check run")

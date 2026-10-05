@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ariane/internal/log"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
 	"go.uber.org/multierr"
@@ -69,8 +69,8 @@ func (m *MergeGroupHandler) Handle(ctx context.Context, eventType, deliveryID st
 		checkRunOptions := github.CreateCheckRunOptions{
 			Name:       checkContext,
 			HeadSHA:    headSHA,
-			Status:     github.Ptr("completed"),
-			Conclusion: github.Ptr("success"),
+			Status:     new("completed"),
+			Conclusion: new("success"),
 		}
 		if _, _, err := client.Checks.CreateCheckRun(ctx, repositoryOwner, repositoryName, checkRunOptions); err != nil {
 			logger.Error().Err(err).Msgf("Failed to set check run, %s", checkContext)

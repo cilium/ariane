@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -67,7 +67,7 @@ func TestWorkflowRunHandler_ConclusionCancelled(t *testing.T) {
 }
 
 func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
-	client, err := github.NewClient(github.WithURLs(github.Ptr("/"), github.Ptr("/")))
+	client, err := github.NewClient(github.WithURLs(new("/"), new("/")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
 }
 
 func TestWorkflowRunHandler_NoPullRequestsFromFork(t *testing.T) {
-	mockURL := github.Ptr("/")
+	mockURL := new("/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -175,15 +175,15 @@ func TestWorkflowRunHandler_UnauthorizedPRCreator(t *testing.T) {
 			// Mock PR endpoint - PR created by unauthorized user
 			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 				prs := []*github.PullRequest{{
-					Number: github.Ptr(1),
+					Number: new(1),
 					User: &github.User{
-						Login: github.Ptr(tc.username),
+						Login: new(tc.username),
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
 			})
 
-			mockURL := github.Ptr(server.URL + "/")
+			mockURL := new(server.URL + "/")
 			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 			if err != nil {
 				t.Fatalf("Failed to create GitHub client: %v", err)
@@ -235,12 +235,12 @@ func TestWorkflowRunHandler_Success_NoStagesConfigured(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -249,7 +249,7 @@ func TestWorkflowRunHandler_Success_NoStagesConfigured(t *testing.T) {
 	// Mock labels endpoint
 	mux.HandleFunc("/repos/owner/repo/issues/1/labels", func(w http.ResponseWriter, r *http.Request) {
 		labels := []*github.Label{
-			{Name: github.Ptr("auto-cicd")},
+			{Name: "auto-cicd"},
 		}
 		_ = json.NewEncoder(w).Encode(labels)
 	})
@@ -265,12 +265,12 @@ triggers:
       - foo.yaml
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -322,12 +322,12 @@ func TestWorkflowRunHandler_Success_PRMissingLabel(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -336,7 +336,7 @@ func TestWorkflowRunHandler_Success_PRMissingLabel(t *testing.T) {
 	// Mock labels endpoint - no auto-cicd label
 	mux.HandleFunc("/repos/owner/repo/issues/1/labels", func(w http.ResponseWriter, r *http.Request) {
 		labels := []*github.Label{
-			{Name: github.Ptr("bug")},
+			{Name: "bug"},
 		}
 		_ = json.NewEncoder(w).Encode(labels)
 	})
@@ -352,12 +352,12 @@ stages-config:
       command: /test
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -411,15 +411,15 @@ func TestWorkflowRunHandler_Success_SuccessfulCommentPostSingleWorkflow(t *testi
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 			Labels: []*github.Label{
-				{Name: github.Ptr("auto-cicd")},
+				{Name: "auto-cicd"},
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -436,7 +436,7 @@ stages-config:
       command: /test
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -449,11 +449,11 @@ stages-config:
 			assert.Equal(t, "/test", comment.GetBody())
 			commentPosted = true
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
+			_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 		}
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -466,7 +466,7 @@ stages-config:
 	mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
 		runs := &github.WorkflowRuns{
 			WorkflowRuns: []*github.WorkflowRun{
-				{Conclusion: github.Ptr("success")},
+				{Conclusion: new("success")},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(runs)
@@ -518,15 +518,15 @@ func TestWorkflowRunHandler_Success_SuccessfulCommentPostTwoWorkflows(t *testing
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 			Labels: []*github.Label{
-				{Name: github.Ptr("auto-cicd")},
+				{Name: "auto-cicd"},
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -544,7 +544,7 @@ stages-config:
       command: /test
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -554,7 +554,7 @@ stages-config:
 		listedWorkflows = append(listedWorkflows, "test.yaml")
 		runs := &github.WorkflowRuns{
 			WorkflowRuns: []*github.WorkflowRun{
-				{Conclusion: github.Ptr("success")},
+				{Conclusion: new("success")},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(runs)
@@ -563,7 +563,7 @@ stages-config:
 		listedWorkflows = append(listedWorkflows, "test2.yaml")
 		runs := &github.WorkflowRuns{
 			WorkflowRuns: []*github.WorkflowRun{
-				{Conclusion: github.Ptr("success")},
+				{Conclusion: new("success")},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(runs)
@@ -577,11 +577,11 @@ stages-config:
 			assert.Equal(t, "/test", comment.GetBody())
 			commentPosted = true
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
+			_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 		}
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -638,15 +638,15 @@ func TestWorkflowRunHandler_Success_FailCommentPostTwoWorkflowsOneFailed(t *test
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 			Labels: []*github.Label{
-				{Name: github.Ptr("auto-cicd")},
+				{Name: "auto-cicd"},
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -664,7 +664,7 @@ stages-config:
       command: /test
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -674,7 +674,7 @@ stages-config:
 		listedWorkflows = append(listedWorkflows, "test.yaml")
 		runs := &github.WorkflowRuns{
 			WorkflowRuns: []*github.WorkflowRun{
-				{Conclusion: github.Ptr("success")},
+				{Conclusion: new("success")},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(runs)
@@ -683,7 +683,7 @@ stages-config:
 		listedWorkflows = append(listedWorkflows, "test2.yaml")
 		runs := &github.WorkflowRuns{
 			WorkflowRuns: []*github.WorkflowRun{
-				{Conclusion: github.Ptr("failure")},
+				{Conclusion: new("failure")},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(runs)
@@ -697,11 +697,11 @@ stages-config:
 			assert.Equal(t, "/test", comment.GetBody())
 			commentPosted = true
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
+			_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 		}
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -756,7 +756,7 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 		{name: "previous comment in proper time window",
 			comments: []github.IssueComment{
 				{
-					Body:      github.Ptr("/test"),
+					Body:      new("/test"),
 					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
 				},
 			},
@@ -778,15 +778,15 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 			// Mock PR endpoint
 			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 				prs := []*github.PullRequest{{
-					Number: github.Ptr(1),
+					Number: new(1),
 					User: &github.User{
-						Login: github.Ptr("owner-renovate[bot]"),
+						Login: new("owner-renovate[bot]"),
 					},
 					Base: &github.PullRequestBranch{
-						Ref: github.Ptr("main"),
+						Ref: new("main"),
 					},
 					Labels: []*github.Label{
-						{Name: github.Ptr("auto-cicd")},
+						{Name: "auto-cicd"},
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
@@ -806,7 +806,7 @@ triggers:
     - dependency.yaml
 `
 				content := &github.RepositoryContent{
-					Content: github.Ptr(configContent),
+					Content: new(configContent),
 				}
 				_ = json.NewEncoder(w).Encode(content)
 			})
@@ -815,9 +815,9 @@ triggers:
 			mux.HandleFunc("/repos/owner/repo/actions/workflows/dependency.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
 				listedWorkflows = append(listedWorkflows, "dependency.yaml")
 				runs := &github.WorkflowRuns{
-					TotalCount: github.Ptr(1),
+					TotalCount: new(1),
 					WorkflowRuns: []*github.WorkflowRun{
-						{Conclusion: github.Ptr("success")},
+						{Conclusion: new("success")},
 					},
 				}
 				_ = json.NewEncoder(w).Encode(runs)
@@ -831,13 +831,13 @@ triggers:
 					assert.Equal(t, "/test", comment.GetBody())
 					commentPosted = true
 					w.WriteHeader(http.StatusCreated)
-					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
+					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 				} else {
 					_ = json.NewEncoder(w).Encode(tc.comments)
 				}
 			})
 
-			mockURL := github.Ptr(server.URL + "/")
+			mockURL := new(server.URL + "/")
 			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 			if err != nil {
 				t.Fatalf("Failed to create GitHub client: %v", err)
@@ -900,19 +900,19 @@ func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *
 	}{
 		{
 			name:                 "second dependency still in progress",
-			secondDependencyRun:  github.WorkflowRun{Status: github.Ptr("in_progress")},
+			secondDependencyRun:  github.WorkflowRun{Status: new("in_progress")},
 			shouldTrigger:        false,
 			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
 		},
 		{
 			name:                 "second dependency failed",
-			secondDependencyRun:  github.WorkflowRun{Status: github.Ptr("completed"), Conclusion: github.Ptr("failure")},
+			secondDependencyRun:  github.WorkflowRun{Status: new("completed"), Conclusion: new("failure")},
 			shouldTrigger:        false,
 			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
 		},
 		{
 			name:                 "all dependencies satisfied",
-			secondDependencyRun:  github.WorkflowRun{Status: github.Ptr("completed"), Conclusion: github.Ptr("success")},
+			secondDependencyRun:  github.WorkflowRun{Status: new("completed"), Conclusion: new("success")},
 			shouldTrigger:        true,
 			expectedListedChecks: []string{"dependency-a.yaml", "dependency-b.yaml"},
 		},
@@ -929,12 +929,12 @@ func TestWorkflowRunHandler_Success_DependencyTriggeringMultipleDependencies(t *
 
 			mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 				prs := []*github.PullRequest{{
-					Number: github.Ptr(1),
+					Number: new(1),
 					User: &github.User{
-						Login: github.Ptr("owner-renovate[bot]"),
+						Login: new("owner-renovate[bot]"),
 					},
 					Base: &github.PullRequestBranch{
-						Ref: github.Ptr("main"),
+						Ref: new("main"),
 					},
 				}}
 				_ = json.NewEncoder(w).Encode(prs)
@@ -957,7 +957,7 @@ triggers:
     - dependency-b.yaml
 `
 				content := &github.RepositoryContent{
-					Content: github.Ptr(configContent),
+					Content: new(configContent),
 				}
 				_ = json.NewEncoder(w).Encode(content)
 			})
@@ -965,9 +965,9 @@ triggers:
 			mux.HandleFunc("/repos/owner/repo/actions/workflows/dependency-a.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
 				listedWorkflows = append(listedWorkflows, "dependency-a.yaml")
 				runs := &github.WorkflowRuns{
-					TotalCount: github.Ptr(1),
+					TotalCount: new(1),
 					WorkflowRuns: []*github.WorkflowRun{
-						{Status: github.Ptr("completed"), Conclusion: github.Ptr("success")},
+						{Status: new("completed"), Conclusion: new("success")},
 					},
 				}
 				_ = json.NewEncoder(w).Encode(runs)
@@ -977,7 +977,7 @@ triggers:
 				listedWorkflows = append(listedWorkflows, "dependency-b.yaml")
 				secondDependencyRun := tc.secondDependencyRun
 				runs := &github.WorkflowRuns{
-					TotalCount:   github.Ptr(1),
+					TotalCount:   new(1),
 					WorkflowRuns: []*github.WorkflowRun{&secondDependencyRun},
 				}
 				_ = json.NewEncoder(w).Encode(runs)
@@ -990,18 +990,18 @@ triggers:
 					assert.Equal(t, "/test", comment.GetBody())
 					commentPosted = true
 					w.WriteHeader(http.StatusCreated)
-					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: github.Ptr[int64](123)})
+					_ = json.NewEncoder(w).Encode(&github.IssueComment{ID: new(int64(123))})
 				} else {
 					_ = json.NewEncoder(w).Encode([]github.IssueComment{
 						{
-							Body:      github.Ptr("/test"),
+							Body:      new("/test"),
 							CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
 						},
 					})
 				}
 			})
 
-			mockURL := github.Ptr(server.URL + "/")
+			mockURL := new(server.URL + "/")
 			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 			if err != nil {
 				t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1066,9 +1066,9 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1077,7 +1077,7 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 	// Mock labels endpoint - has rerun-failed:2 label
 	mux.HandleFunc("/repos/owner/repo/issues/1/labels", func(w http.ResponseWriter, r *http.Request) {
 		labels := []*github.Label{
-			{Name: github.Ptr("rerun-failed:2")},
+			{Name: "rerun-failed:2"},
 		}
 		_ = json.NewEncoder(w).Encode(labels)
 	})
@@ -1085,8 +1085,8 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 	// Mock workflow run endpoint - already at attempt 3 (exceeded max of 2)
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123", func(w http.ResponseWriter, r *http.Request) {
 		run := &github.WorkflowRun{
-			ID:         github.Ptr[int64](123),
-			RunAttempt: github.Ptr(3),
+			ID:         new(int64(123)),
+			RunAttempt: new(3),
 		}
 		_ = json.NewEncoder(w).Encode(run)
 	})
@@ -1097,7 +1097,7 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1153,9 +1153,9 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-release[bot]"),
+				Login: new("owner-release[bot]"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1164,7 +1164,7 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 	// Mock labels endpoint - has rerun-failed:3 label
 	mux.HandleFunc("/repos/owner/repo/issues/1/labels", func(w http.ResponseWriter, r *http.Request) {
 		labels := []*github.Label{
-			{Name: github.Ptr("rerun-failed:3")},
+			{Name: "rerun-failed:3"},
 		}
 		_ = json.NewEncoder(w).Encode(labels)
 	})
@@ -1172,8 +1172,8 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 	// Mock workflow run endpoint - first attempt
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123", func(w http.ResponseWriter, r *http.Request) {
 		run := &github.WorkflowRun{
-			ID:         github.Ptr[int64](123),
-			RunAttempt: github.Ptr(1),
+			ID:         new(int64(123)),
+			RunAttempt: new(1),
 		}
 		_ = json.NewEncoder(w).Encode(run)
 	})
@@ -1181,17 +1181,17 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 	// Mock jobs endpoint - return no failed jobs (all successful)
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123/jobs", func(w http.ResponseWriter, r *http.Request) {
 		jobs := &github.Jobs{
-			TotalCount: github.Ptr(2),
+			TotalCount: new(2),
 			Jobs: []*github.WorkflowJob{
 				{
-					ID:         github.Ptr[int64](1),
-					Name:       github.Ptr("test-job-1"),
-					Conclusion: github.Ptr("success"),
+					ID:         new(int64(1)),
+					Name:       new("test-job-1"),
+					Conclusion: new("success"),
 				},
 				{
-					ID:         github.Ptr[int64](2),
-					Name:       github.Ptr("test-job-2"),
-					Conclusion: github.Ptr("success"),
+					ID:         new(int64(2)),
+					Name:       new("test-job-2"),
+					Conclusion: new("success"),
 				},
 			},
 		}
@@ -1204,7 +1204,7 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1260,12 +1260,12 @@ func TestWorkflowRunHandler_Failure_WorkflowNotInRerunList(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1281,7 +1281,7 @@ rerun:
     - integration-test.yaml
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1292,7 +1292,7 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1348,12 +1348,12 @@ func TestWorkflowRunHandler_Failure_WorkflowInRerunList(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1369,7 +1369,7 @@ rerun:
     - integration-test.yaml
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1377,8 +1377,8 @@ rerun:
 	// Mock workflow run endpoint - first attempt
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123", func(w http.ResponseWriter, r *http.Request) {
 		run := &github.WorkflowRun{
-			ID:         github.Ptr[int64](123),
-			RunAttempt: github.Ptr(1),
+			ID:         new(int64(123)),
+			RunAttempt: new(1),
 		}
 		_ = json.NewEncoder(w).Encode(run)
 	})
@@ -1386,12 +1386,12 @@ rerun:
 	// Mock jobs endpoint - return failed jobs
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123/jobs", func(w http.ResponseWriter, r *http.Request) {
 		jobs := &github.Jobs{
-			TotalCount: github.Ptr(2),
+			TotalCount: new(2),
 			Jobs: []*github.WorkflowJob{
 				{
-					ID:         github.Ptr[int64](1),
-					Name:       github.Ptr("test-job-1"),
-					Conclusion: github.Ptr("failure"),
+					ID:         new(int64(1)),
+					Name:       new("test-job-1"),
+					Conclusion: new("failure"),
 				},
 			},
 		}
@@ -1406,7 +1406,7 @@ rerun:
 		}
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1462,12 +1462,12 @@ func TestWorkflowRunHandler_Failure_ConfigEnforcesMaxRetries(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1480,7 +1480,7 @@ rerun:
   max-retries: 2
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1488,8 +1488,8 @@ rerun:
 	// Mock workflow run endpoint - attempt 3 (exceeds config max of 2)
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123", func(w http.ResponseWriter, r *http.Request) {
 		run := &github.WorkflowRun{
-			ID:         github.Ptr[int64](123),
-			RunAttempt: github.Ptr(3),
+			ID:         new(int64(123)),
+			RunAttempt: new(3),
 		}
 		_ = json.NewEncoder(w).Encode(run)
 	})
@@ -1500,7 +1500,7 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1556,12 +1556,12 @@ func TestWorkflowRunHandler_Failure_EmptyWorkflowsListAllowsAll(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1575,7 +1575,7 @@ rerun:
   workflows: []
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1583,8 +1583,8 @@ rerun:
 	// Mock workflow run endpoint - first attempt
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123", func(w http.ResponseWriter, r *http.Request) {
 		run := &github.WorkflowRun{
-			ID:         github.Ptr[int64](123),
-			RunAttempt: github.Ptr(1),
+			ID:         new(int64(123)),
+			RunAttempt: new(1),
 		}
 		_ = json.NewEncoder(w).Encode(run)
 	})
@@ -1592,12 +1592,12 @@ rerun:
 	// Mock jobs endpoint - return failed jobs
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123/jobs", func(w http.ResponseWriter, r *http.Request) {
 		jobs := &github.Jobs{
-			TotalCount: github.Ptr(2),
+			TotalCount: new(2),
 			Jobs: []*github.WorkflowJob{
 				{
-					ID:         github.Ptr[int64](1),
-					Name:       github.Ptr("test-job-1"),
-					Conclusion: github.Ptr("failure"),
+					ID:         new(int64(1)),
+					Name:       new("test-job-1"),
+					Conclusion: new("failure"),
 				},
 			},
 		}
@@ -1612,7 +1612,7 @@ rerun:
 		}
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1668,12 +1668,12 @@ func TestWorkflowRunHandler_Failure_WorkflowInExcludeList(t *testing.T) {
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1689,7 +1689,7 @@ rerun:
     - unstable-e2e.yaml
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1700,7 +1700,7 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1756,12 +1756,12 @@ func TestWorkflowRunHandler_Failure_ExcludeListTakesPrecedenceOverAllowedList(t 
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1779,7 +1779,7 @@ rerun:
     - integration-test.yaml
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1790,7 +1790,7 @@ rerun:
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -1846,12 +1846,12 @@ func TestWorkflowRunHandler_Failure_WorkflowNotInExcludeListAllowsRerun(t *testi
 	// Mock PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		prs := []*github.PullRequest{{
-			Number: github.Ptr(1),
+			Number: new(1),
 			User: &github.User{
-				Login: github.Ptr("owner-renovate[bot]"),
+				Login: new("owner-renovate[bot]"),
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}}
 		_ = json.NewEncoder(w).Encode(prs)
@@ -1866,7 +1866,7 @@ rerun:
     - flaky-test.yaml
 `
 		content := &github.RepositoryContent{
-			Content: github.Ptr(configContent),
+			Content: new(configContent),
 		}
 		_ = json.NewEncoder(w).Encode(content)
 	})
@@ -1874,8 +1874,8 @@ rerun:
 	// Mock workflow run endpoint - first attempt
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123", func(w http.ResponseWriter, r *http.Request) {
 		run := &github.WorkflowRun{
-			ID:         github.Ptr[int64](123),
-			RunAttempt: github.Ptr(1),
+			ID:         new(int64(123)),
+			RunAttempt: new(1),
 		}
 		_ = json.NewEncoder(w).Encode(run)
 	})
@@ -1883,12 +1883,12 @@ rerun:
 	// Mock jobs endpoint - return failed jobs
 	mux.HandleFunc("/repos/owner/repo/actions/runs/123/jobs", func(w http.ResponseWriter, r *http.Request) {
 		jobs := &github.Jobs{
-			TotalCount: github.Ptr(2),
+			TotalCount: new(2),
 			Jobs: []*github.WorkflowJob{
 				{
-					ID:         github.Ptr[int64](1),
-					Name:       github.Ptr("test-job-1"),
-					Conclusion: github.Ptr("failure"),
+					ID:         new(int64(1)),
+					Name:       new("test-job-1"),
+					Conclusion: new("failure"),
 				},
 			},
 		}
@@ -1903,7 +1903,7 @@ rerun:
 		}
 	})
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)

@@ -20,7 +20,7 @@ import (
 	reflect "reflect"
 
 	"github.com/cilium/ariane/internal/config"
-	github "github.com/google/go-github/v88/github"
+	github "github.com/google/go-github/v92/github"
 	"github.com/rs/zerolog"
 	githubv4 "github.com/shurcooL/githubv4"
 	gomock "go.uber.org/mock/gomock"
@@ -106,7 +106,7 @@ func TestHandle_ActionNotCreated(t *testing.T) {
 func TestHandle_IsInvalidBot(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestHandle_IsValidBot(t *testing.T) {
 
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -206,7 +206,7 @@ func TestHandle(t *testing.T) {
 
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -251,7 +251,7 @@ func TestHandle(t *testing.T) {
 func Test_isAllowedTeamMember(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -304,7 +304,7 @@ func Test_isAllowedTeamMember(t *testing.T) {
 func Test_rerunFailedJobs(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -354,7 +354,7 @@ func Test_rerunFailedJobs(t *testing.T) {
 func Test_shouldSkipWorkflow(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
@@ -423,15 +423,15 @@ func setMockServer() *httptest.Server {
 			{
 				Number: &number,
 				Head: &github.PullRequestBranch{
-					Ref: github.Ptr("pr/owner/mybugfix"),
-					SHA: github.Ptr("mock-sha"),
+					Ref: new("pr/owner/mybugfix"),
+					SHA: new("mock-sha"),
 					Repo: &github.Repository{
-						Owner: &github.User{Login: github.Ptr("owner")},
-						Name:  github.Ptr("repo"),
+						Owner: &github.User{Login: new("owner")},
+						Name:  new("repo"),
 					},
 				},
 				Base: &github.PullRequestBranch{
-					Ref: github.Ptr("main"),
+					Ref: new("main"),
 				},
 			},
 		}
@@ -441,17 +441,17 @@ func setMockServer() *httptest.Server {
 	})
 	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
 		pr := &github.PullRequest{
-			State: github.Ptr("open"),
+			State: new("open"),
 			Head: &github.PullRequestBranch{
-				Ref: github.Ptr("pr/owner/mybugfix"),
-				SHA: github.Ptr("mock-sha"),
+				Ref: new("pr/owner/mybugfix"),
+				SHA: new("mock-sha"),
 				Repo: &github.Repository{
-					Owner: &github.User{Login: github.Ptr("owner")},
-					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: new("owner")},
+					Name:  new("repo"),
 				},
 			},
 			Base: &github.PullRequestBranch{
-				Ref: github.Ptr("main"),
+				Ref: new("main"),
 			},
 		}
 		if err := json.NewEncoder(w).Encode(pr); err != nil {
@@ -462,7 +462,7 @@ func setMockServer() *httptest.Server {
 		// https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests-files
 		files := []*github.CommitFile{
 			{
-				Filename: github.Ptr(".github/workflows/foo.yaml"),
+				Filename: new(".github/workflows/foo.yaml"),
 			},
 		}
 		if err := json.NewEncoder(w).Encode(files); err != nil {
@@ -476,11 +476,11 @@ func setMockServer() *httptest.Server {
 		switch author {
 		case "trustedauthor":
 			membership = &github.Membership{
-				State: github.Ptr("active"),
+				State: new("active"),
 			}
 		case "unknownauthor":
 			membership = &github.Membership{
-				State: github.Ptr("pending"),
+				State: new("pending"),
 			}
 		}
 
@@ -504,101 +504,101 @@ func setMockServer() *httptest.Server {
 		// search specific workflows, filtering by HeadSHA of the PR
 		if SHA != "mock-sha" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount:   github.Ptr(0),
+				TotalCount:   new(0),
 				WorkflowRuns: []*github.WorkflowRun{},
 			}
 		} else if workflow == "foo.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Ptr(2),
+				TotalCount: new(2),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:      github.Ptr(int64(1)),
-						Status:  github.Ptr("cancelled"),
-						HeadSHA: github.Ptr(SHA),
+						ID:      new(int64(1)),
+						Status:  new("cancelled"),
+						HeadSHA: new(SHA),
 					},
 				},
 			}
 		} else if workflow == "bar.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Ptr(1),
+				TotalCount: new(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Ptr(int64(2)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("success"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(2)),
+						Status:     new("completed"),
+						Conclusion: new("success"),
+						HeadSHA:    new(SHA),
 					},
 				},
 			}
 		} else if workflow == "foobar.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Ptr(1),
+				TotalCount: new(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Ptr(int64(99)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("failure"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(99)),
+						Status:     new("completed"),
+						Conclusion: new("failure"),
+						HeadSHA:    new(SHA),
 					},
 				},
 			}
 		} else if workflow == "eventually-passing.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Ptr(1),
+				TotalCount: new(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Ptr(int64(99)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("success"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(99)),
+						Status:     new("completed"),
+						Conclusion: new("success"),
+						HeadSHA:    new(SHA),
 					},
 					{
-						ID:         github.Ptr(int64(9)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("failure"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(9)),
+						Status:     new("completed"),
+						Conclusion: new("failure"),
+						HeadSHA:    new(SHA),
 					},
 				},
 			}
 		} else if workflow == "eventually-failing.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Ptr(1),
+				TotalCount: new(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Ptr(int64(99)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("failure"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(99)),
+						Status:     new("completed"),
+						Conclusion: new("failure"),
+						HeadSHA:    new(SHA),
 					},
 					{
-						ID:         github.Ptr(int64(9)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("success"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(9)),
+						Status:     new("completed"),
+						Conclusion: new("success"),
+						HeadSHA:    new(SHA),
 					},
 				},
 			}
 		} else if workflow == "in-progress.yaml" {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount: github.Ptr(1),
+				TotalCount: new(1),
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Ptr(int64(99)),
-						Status:     github.Ptr("in_progress"),
-						Conclusion: github.Ptr("failure"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(99)),
+						Status:     new("in_progress"),
+						Conclusion: new("failure"),
+						HeadSHA:    new(SHA),
 					},
 					{
-						ID:         github.Ptr(int64(9)),
-						Status:     github.Ptr("completed"),
-						Conclusion: github.Ptr("success"),
-						HeadSHA:    github.Ptr(SHA),
+						ID:         new(int64(9)),
+						Status:     new("completed"),
+						Conclusion: new("success"),
+						HeadSHA:    new(SHA),
 					},
 				},
 			}
 		} else {
 			workflowRuns = &github.WorkflowRuns{
-				TotalCount:   github.Ptr(0),
+				TotalCount:   new(0),
 				WorkflowRuns: []*github.WorkflowRun{},
 			}
 		}
@@ -614,12 +614,12 @@ func setMockServer() *httptest.Server {
 		}
 		// runID 99 is the failed workflow listed above
 		jobs := &github.Jobs{
-			TotalCount: github.Ptr(3),
+			TotalCount: new(3),
 			Jobs: []*github.WorkflowJob{
 				{
-					ID:    github.Ptr(int64(1)),
-					RunID: github.Ptr(int64(99)),
-					Name:  github.Ptr("Installation and Conformance"),
+					ID:    new(int64(1)),
+					RunID: new(int64(99)),
+					Name:  new("Installation and Conformance"),
 				},
 			},
 		}
@@ -641,8 +641,8 @@ func setMockServer() *httptest.Server {
 	mux.HandleFunc("POST /repos/owner/repo/issues/comments/1/reactions", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/reactions/reactions?apiVersion=2022-11-28#create-reaction-for-an-issue-comment
 		reaction := &github.Reaction{
-			ID:      github.Ptr(int64(1)),
-			Content: github.Ptr(r.PostFormValue("content")),
+			ID:      new(int64(1)),
+			Content: new(r.PostFormValue("content")),
 		}
 		if err := json.NewEncoder(w).Encode(reaction); err != nil {
 			http.Error(w, "setMockServer: could not encode the reaction payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -658,8 +658,8 @@ func setMockServer() *httptest.Server {
 			return
 		}
 		comment := &github.IssueComment{
-			ID:   github.Ptr(int64(2)),
-			Body: github.Ptr(requestBody.Body),
+			ID:   new(int64(2)),
+			Body: new(requestBody.Body),
 		}
 		if err := json.NewEncoder(w).Encode(comment); err != nil {
 			http.Error(w, "setMockServer: could not encode the comment payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -668,9 +668,9 @@ func setMockServer() *httptest.Server {
 	mux.HandleFunc("/repos/owner/repo/actions/workflows/foo.yaml", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#get-a-workflow
 		workflow := &github.Workflow{
-			ID:   github.Ptr(int64(1)),
-			Name: github.Ptr("Foo Workflow"),
-			Path: github.Ptr(".github/workflows/foo.yaml"),
+			ID:   new(int64(1)),
+			Name: new("Foo Workflow"),
+			Path: new(".github/workflows/foo.yaml"),
 		}
 		if err := json.NewEncoder(w).Encode(workflow); err != nil {
 			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -678,9 +678,9 @@ func setMockServer() *httptest.Server {
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/workflows/bar.yaml", func(w http.ResponseWriter, r *http.Request) {
 		workflow := &github.Workflow{
-			ID:   github.Ptr(int64(2)),
-			Name: github.Ptr("Bar Workflow"),
-			Path: github.Ptr(".github/workflows/bar.yaml"),
+			ID:   new(int64(2)),
+			Name: new("Bar Workflow"),
+			Path: new(".github/workflows/bar.yaml"),
 		}
 		if err := json.NewEncoder(w).Encode(workflow); err != nil {
 			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
@@ -694,9 +694,9 @@ func setMockServer() *httptest.Server {
 			return
 		}
 		checkRun := &github.CheckRun{
-			ID:         github.Ptr(int64(1)),
-			Name:       github.Ptr(requestBody.Name),
-			HeadSHA:    github.Ptr(requestBody.HeadSHA),
+			ID:         new(int64(1)),
+			Name:       new(requestBody.Name),
+			HeadSHA:    new(requestBody.HeadSHA),
 			Status:     requestBody.Status,
 			Conclusion: requestBody.Conclusion,
 		}
@@ -719,11 +719,11 @@ someOtherKey: someOtherValue
 
 	mux.HandleFunc("/repos/owner/repo/commits/mock-sha/check-runs", func(w http.ResponseWriter, r *http.Request) {
 		result := github.ListCheckRunsResults{
-			Total: github.Ptr(1),
+			Total: new(1),
 			CheckRuns: []*github.CheckRun{
 				{
-					Status:     github.Ptr("completed"),
-					Conclusion: github.Ptr("skipped"),
+					Status:     new("completed"),
+					Conclusion: new("skipped"),
 				},
 			},
 		}
@@ -798,7 +798,7 @@ func TestHandle_WorkflowStatusTable(t *testing.T) {
 
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1030,7 +1030,7 @@ func TestHandle_FeedbackDisabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(false, false, &[]string{}, false, false)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1091,7 +1091,7 @@ func TestHandle_VerboseEnabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(true, false, &[]string{}, false, false)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1152,7 +1152,7 @@ func TestHandle_WorkflowsReportEnabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(true, true, &reactions, false, false)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1214,7 +1214,7 @@ func TestHandle_WorkflowsReportDisabled(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(true, false, &[]string{}, false, false)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1270,7 +1270,7 @@ func TestHandle_WorkflowsDependencyRunningReaction(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(false, false, &reactions, true, true)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1327,7 +1327,7 @@ func TestHandle_WorkflowsDependencyFailedReaction(t *testing.T) {
 	server := setMockServerWithFeedbackConfig(false, false, &reactions, true, false)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
+	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	clientV4 := githubv4.NewClient(nil)
 	if err != nil {
@@ -1382,16 +1382,16 @@ func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool, reactio
 	// Mock individual PR endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls/0", func(w http.ResponseWriter, r *http.Request) {
 		pr := github.PullRequest{
-			Number: github.Ptr(0),
+			Number: new(0),
 			Head: &github.PullRequestBranch{
-				SHA: github.Ptr("abc123"),
-				Ref: github.Ptr("feature-branch"),
+				SHA: new("abc123"),
+				Ref: new("feature-branch"),
 				Repo: &github.Repository{
-					Owner: &github.User{Login: github.Ptr("owner")},
-					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: new("owner")},
+					Name:  new("repo"),
 				},
 			},
-			State: github.Ptr("open"),
+			State: new("open"),
 		}
 		_ = json.NewEncoder(w).Encode(&pr)
 	})
@@ -1399,12 +1399,12 @@ func setMockServerWithFeedbackConfig(verbose bool, workflowsReport bool, reactio
 	// Mock PR list endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		pr := github.PullRequest{
-			Number: github.Ptr(0),
+			Number: new(0),
 			Head: &github.PullRequestBranch{
-				SHA: github.Ptr("abc123"),
-				Ref: github.Ptr("feature-branch"),
+				SHA: new("abc123"),
+				Ref: new("feature-branch"),
 			},
-			State: github.Ptr("open"),
+			State: new("open"),
 		}
 		_ = json.NewEncoder(w).Encode([]*github.PullRequest{&pr})
 	})
@@ -1428,8 +1428,8 @@ workflows:
 `
 
 			content := github.RepositoryContent{
-				Content:  github.Ptr(configContent),
-				Encoding: github.Ptr(""),
+				Content:  new(configContent),
+				Encoding: new(""),
 			}
 			_ = json.NewEncoder(w).Encode(&content)
 		})
@@ -1446,12 +1446,12 @@ workflows:
 			workflowRuns := github.WorkflowRuns{
 				WorkflowRuns: []*github.WorkflowRun{
 					{
-						ID:         github.Ptr(int64(2)),
-						Status:     github.Ptr(status),
-						Conclusion: github.Ptr(conclusion),
+						ID:         new(int64(2)),
+						Status:     new(status),
+						Conclusion: new(conclusion),
 					},
 				},
-				TotalCount: github.Ptr(1),
+				TotalCount: new(1),
 			}
 			_ = json.NewEncoder(w).Encode(&workflowRuns)
 		})
@@ -1471,8 +1471,8 @@ workflows:
 `, verbose, workflowsReport)
 
 			content := github.RepositoryContent{
-				Content:  github.Ptr(configContent),
-				Encoding: github.Ptr(""),
+				Content:  new(configContent),
+				Encoding: new(""),
 			}
 			_ = json.NewEncoder(w).Encode(&content)
 		})
@@ -1481,7 +1481,7 @@ workflows:
 	// Mock PR files endpoint
 	mux.HandleFunc("/repos/owner/repo/pulls/0/files", func(w http.ResponseWriter, r *http.Request) {
 		files := []*github.CommitFile{
-			{Filename: github.Ptr("test.go")},
+			{Filename: new("test.go")},
 		}
 		_ = json.NewEncoder(w).Encode(files)
 	})
@@ -1494,7 +1494,7 @@ workflows:
 	// Mock check runs list endpoint
 	mux.HandleFunc("/repos/owner/repo/commits/abc123/check-runs", func(w http.ResponseWriter, r *http.Request) {
 		checkRuns := github.ListCheckRunsResults{
-			Total:     github.Ptr(0),
+			Total:     new(0),
 			CheckRuns: []*github.CheckRun{},
 		}
 		_ = json.NewEncoder(w).Encode(&checkRuns)
@@ -1503,7 +1503,7 @@ workflows:
 	// Mock check runs create endpoint
 	mux.HandleFunc("/repos/owner/repo/check-runs", func(w http.ResponseWriter, r *http.Request) {
 		checkRun := github.CheckRun{
-			ID: github.Ptr(int64(1)),
+			ID: new(int64(1)),
 		}
 		_ = json.NewEncoder(w).Encode(&checkRun)
 	})
@@ -1511,7 +1511,7 @@ workflows:
 	// Mock issue comments endpoint
 	mux.HandleFunc("/repos/owner/repo/issues/0/comments", func(w http.ResponseWriter, r *http.Request) {
 		comment := github.IssueComment{
-			ID: github.Ptr(int64(1)),
+			ID: new(int64(1)),
 		}
 		_ = json.NewEncoder(w).Encode(&comment)
 	})
@@ -1529,7 +1529,7 @@ workflows:
 		*reactions = append(*reactions, incomingReaction.GetContent())
 
 		reaction := github.Reaction{
-			ID: github.Ptr(int64(1)),
+			ID: new(int64(1)),
 		}
 		_ = json.NewEncoder(w).Encode(&reaction)
 	})

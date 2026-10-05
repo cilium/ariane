@@ -8,14 +8,14 @@ import (
 	"testing"
 
 	"github.com/cilium/ariane/internal/config"
-	github "github.com/google/go-github/v88/github"
+	github "github.com/google/go-github/v92/github"
 	"github.com/rs/zerolog"
 )
 
 func Test_checkTriggerDependency(t *testing.T) {
 	mockServer := setMockServer()
 	defer mockServer.Close()
-	mockURL := github.Ptr(mockServer.URL + "/")
+	mockURL := new(mockServer.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)

@@ -12,7 +12,7 @@ import (
 
 	"github.com/cilium/ariane/internal/config"
 	"github.com/cilium/ariane/internal/log"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
 	"go.uber.org/multierr"

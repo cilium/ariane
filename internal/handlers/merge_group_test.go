@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )

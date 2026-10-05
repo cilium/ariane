@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/cilium/ariane/internal/config"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v92/github"
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
 )
@@ -66,8 +66,8 @@ func prHasLabel(ctx context.Context, client *github.Client, pr *github.PullReque
 }
 
 func commentOnPullRequest(ctx context.Context, client *github.Client, owner, repo string, prNumber int, commentBody string, logger zerolog.Logger) error {
-	comment := &github.IssueComment{
-		Body: github.Ptr(commentBody),
+	comment := github.IssueCommentRequest{
+		Body: commentBody,
 	}
 	_, _, err := client.Issues.CreateComment(ctx, owner, repo, prNumber, comment)
 	if err != nil {
