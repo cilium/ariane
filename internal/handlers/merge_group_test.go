@@ -63,7 +63,8 @@ func respond(t *testing.T, status int, body string) http.HandlerFunc {
 		if status != 0 {
 			w.WriteHeader(status)
 		}
-		fmt.Fprint(w, body)
+		_, err := fmt.Fprint(w, body)
+		assert.NoError(t, err)
 	}
 }
 
@@ -247,13 +248,15 @@ func TestMergeGroupHandler_Handle(t *testing.T) {
 func TestMergeGroupHandler_RulesetPagination(t *testing.T) {
 	rules := func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") == "2" {
-			fmt.Fprint(w, rulesBody([]string{"ci/page2"}, nil))
+			_, err := fmt.Fprint(w, rulesBody([]string{"ci/page2"}, nil))
+			assert.NoError(t, err)
 			return
 		}
 		// point go-github at page 2 through the Link header. only the page
 		// query value matters for resp.NextPage
 		w.Header().Set("Link", `<http://example.com/rules?page=2>; rel="next"`)
-		fmt.Fprint(w, rulesBody([]string{"ci/page1"}, nil))
+		_, err := fmt.Fprint(w, rulesBody([]string{"ci/page1"}, nil))
+		assert.NoError(t, err)
 	}
 
 	stamped, err := runMergeGroup(t, "checks_requested", true,
