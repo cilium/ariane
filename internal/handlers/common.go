@@ -5,15 +5,40 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/cilium/ariane/internal/config"
 	"github.com/google/go-github/v88/github"
+	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
 )
+
+// ResolveAppBotLogin returns the login of the GitHub App's own bot user, e.g.
+// "ariane[bot]". The login is a property of the app itself and never changes while the
+// process runs, so it is resolved once at startup and handed to the handlers that need
+// it. Retrieving the app requires app authentication rather than installation
+// authentication, hence the dedicated client.
+func ResolveAppBotLogin(ctx context.Context, clientCreator githubapp.ClientCreator) (string, error) {
+	client, err := clientCreator.NewAppClient()
+	if err != nil {
+		return "", fmt.Errorf("failed to create app client: %w", err)
+	}
+
+	app, _, err := client.Apps.Get(ctx, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve app: %w", err)
+	}
+
+	if app.GetSlug() == "" {
+		return "", errors.New("app has no slug")
+	}
+
+	return app.GetSlug() + "[bot]", nil
+}
 
 func rerunFailedJobs(ctx context.Context, client *github.Client, owner, repo string, runID int64, workflowName string, logger zerolog.Logger) error {
 	jobListOpts := &github.ListWorkflowJobsOptions{

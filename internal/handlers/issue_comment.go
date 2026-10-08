@@ -169,7 +169,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		if ok {
 			comment = skippedError.Error()
 			logger.Debug().Err(skippedError).Msg(comment)
-			commentErr := commenter.reactToComment(ctx, commentID, "+1")
+			commentErr := commenter.reactToComment(ctx, commentID, pendingTriggerReaction)
 			if commentErr != nil {
 				logger.Error().Err(skippedError).Msg("Failed to react to comment with thumbs up emoji")
 			}
