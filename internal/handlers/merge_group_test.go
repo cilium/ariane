@@ -96,14 +96,15 @@ func runMergeGroup(t *testing.T, action string, expectClient bool, classic, rule
 		mu.Lock()
 		stamped = append(stamped, run.Name)
 		mu.Unlock()
-		_ = json.NewEncoder(w).Encode(&github.CheckRun{ID: github.Ptr(int64(1))})
+		one := int64(1)
+		_ = json.NewEncoder(w).Encode(&github.CheckRun{ID: &one})
 	})
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	mockURL := github.Ptr(server.URL + "/")
-	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	mockURL := server.URL + "/"
+	client, err := github.NewClient(github.WithURLs(&mockURL, &mockURL))
 	if err != nil {
 		t.Fatalf("new github client: %v", err)
 	}
