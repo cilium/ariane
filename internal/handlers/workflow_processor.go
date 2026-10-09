@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"sync"
@@ -425,13 +424,8 @@ triggers:
 			continue
 		}
 		foundTriggerComment := ""
-		re, err := regexp.Compile(triggerPhrase)
-		if err != nil {
-			w.logger.Error().Err(err).Msgf("Failed to compile regex for trigger phrase '%s'", triggerPhrase)
-			continue
-		}
 		for _, comment := range comments {
-			if re.MatchString(comment.GetBody()) {
+			if w.arianeConfig.MatchTrigger(ctx, triggerPhrase, comment.GetBody()) != nil {
 				foundTriggerComment = comment.GetBody()
 			}
 		}
