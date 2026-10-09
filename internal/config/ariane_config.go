@@ -98,15 +98,20 @@ func GetArianeConfigFromRepository(client *github.Client, ctx context.Context, o
 	return config, nil
 }
 
-// CheckForTrigger checks if any trigger registered in config match given comment.
+// MatchTrigger matches an entire comment against a configured trigger expression.
+func (*ArianeConfig) MatchTrigger(ctx context.Context, triggerExpression, comment string) []string {
+	re, err := regexp.Compile(`^` + triggerExpression + `$`)
+	if err != nil {
+		log.FromContext(ctx).Err(err).Msgf("cannot compile regexp %q", triggerExpression)
+		return nil
+	}
+	return re.FindStringSubmatch(comment)
+}
+
+// CheckForTrigger checks if any trigger registered in config matches the given comment.
 func (config *ArianeConfig) CheckForTrigger(ctx context.Context, comment string) (submatch []string, workflows []string, dependsOn []string) {
-	for regex, trigger := range config.Triggers {
-		re, err := regexp.Compile(`^` + regex + `$`)
-		if err != nil {
-			log.FromContext(ctx).Err(err).Msgf("cannot compile regexp %q", regex)
-			continue
-		}
-		submatch := re.FindStringSubmatch(comment)
+	for triggerExpression, trigger := range config.Triggers {
+		submatch := config.MatchTrigger(ctx, triggerExpression, comment)
 		if submatch != nil {
 			return submatch, trigger.Workflows, trigger.DependsOn
 		}

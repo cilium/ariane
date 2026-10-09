@@ -753,6 +753,15 @@ func TestWorkflowRunHandler_Success_DependencyTriggering(t *testing.T) {
 		shouldTrigger bool
 	}{
 		{name: "no previous comments", comments: []github.IssueComment{}, shouldTrigger: false},
+		{name: "trigger phrase in URL",
+			comments: []github.IssueComment{
+				{
+					Body:      new("See https://github.com/owner/repo/tests/example.go"),
+					CreatedAt: &github.Timestamp{Time: time.Now().Add(-1 * time.Hour)},
+				},
+			},
+			shouldTrigger: false,
+		},
 		{name: "previous comment in proper time window",
 			comments: []github.IssueComment{
 				{
