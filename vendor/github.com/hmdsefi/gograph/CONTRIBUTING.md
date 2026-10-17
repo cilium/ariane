@@ -5,6 +5,9 @@ features are all welcome.
 
 ## Finding something to work on
 
+- The [open milestones](https://github.com/hmdsefi/gograph/milestones?state=open&sort=due_date&direction=asc)
+  group the issues by release, the next release first. Please start with an issue from
+  the earliest one, since that's the work needed soonest.
 - The [roadmap](https://github.com/hmdsefi/gograph/issues/136) lists planned work in the order it's likely to land.
 - Issues labeled [good first issue](https://github.com/hmdsefi/gograph/labels/good%20first%20issue)
   are small and well described.
@@ -17,8 +20,9 @@ API before you write the code.
 
 ## Development setup
 
-You need Go 1.24.2 or newer (see `go.mod`) and, for linting,
-[golangci-lint](https://golangci-lint.run/) v2.
+You need Go 1.26 or newer (see `go.mod`) and, for linting,
+[golangci-lint](https://golangci-lint.run/) v2.14 or newer.
+gograph supports the two most recent Go releases.
 
 ```shell
 git clone https://github.com/<your-username>/gograph.git
@@ -66,6 +70,8 @@ practice:
 
 - Keep each pull request to one change. Several small pull requests are easier to
   review than one large one.
+- Fill in the [pull request template](.github/PULL_REQUEST_TEMPLATE.md) in the
+  description, including the checklist.
 - Reference the issue in the description, for example `Fixes #123`.
 - Describe how you tested the change.
 - Make sure `go test -race ./...` and `golangci-lint run ./...` pass locally.
