@@ -34,7 +34,9 @@ type ArianeConfig struct {
 type FeedbackConfig struct {
 	// Whether to log verbose feedback
 	Verbose *bool `yaml:"verbose,omitempty"`
-	// Whether to react to comments and pull request descriptions
+	// Whether to react to comments and pull request descriptions. The thumbs up marking a
+	// command deferred until its dependencies complete is added regardless, as Ariane
+	// relies on it to dispatch the command later.
 	Reactions *bool `yaml:"reactions,omitempty"`
 	// Whether to report on workflows triggered by ariane
 	WorkflowsReport *bool `yaml:"workflows-report,omitempty"`
@@ -98,25 +100,30 @@ func GetArianeConfigFromRepository(client *github.Client, ctx context.Context, o
 	return config, nil
 }
 
-// MatchTrigger matches an entire comment against a configured trigger expression.
-func (*ArianeConfig) MatchTrigger(ctx context.Context, triggerExpression, comment string) []string {
-	re, err := regexp.Compile(`^` + triggerExpression + `$`)
-	if err != nil {
-		log.FromContext(ctx).Err(err).Msgf("cannot compile regexp %q", triggerExpression)
-		return nil
+// MatchTrigger returns the trigger phrase requested by the given comment, along with the
+// regex submatch and the trigger configuration. The trigger regex is anchored, so the
+// comment has to be a command on its own rather than merely contain one.
+func (config *ArianeConfig) MatchTrigger(ctx context.Context, comment string) (phrase string, submatch []string, trigger TriggerConfig, ok bool) {
+	for regex, trigger := range config.Triggers {
+		re, err := regexp.Compile(`^` + regex + `$`)
+		if err != nil {
+			log.FromContext(ctx).Err(err).Msgf("cannot compile regexp %q", regex)
+			continue
+		}
+		if submatch := re.FindStringSubmatch(comment); submatch != nil {
+			return regex, submatch, trigger, true
+		}
 	}
-	return re.FindStringSubmatch(comment)
+	return "", nil, TriggerConfig{}, false
 }
 
 // CheckForTrigger checks if any trigger registered in config matches the given comment.
 func (config *ArianeConfig) CheckForTrigger(ctx context.Context, comment string) (submatch []string, workflows []string, dependsOn []string) {
-	for triggerExpression, trigger := range config.Triggers {
-		submatch := config.MatchTrigger(ctx, triggerExpression, comment)
-		if submatch != nil {
-			return submatch, trigger.Workflows, trigger.DependsOn
-		}
+	_, submatch, trigger, ok := config.MatchTrigger(ctx, comment)
+	if !ok {
+		return nil, nil, nil
 	}
-	return nil, nil, nil
+	return submatch, trigger.Workflows, trigger.DependsOn
 }
 
 func (c *ArianeConfig) GetVerbose() bool {

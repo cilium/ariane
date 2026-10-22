@@ -27,6 +27,7 @@ type WorkflowProcessor struct {
 	repo         string
 	logger       zerolog.Logger
 	runDelay     time.Duration
+	appBotLogin  string
 }
 
 func (w *WorkflowProcessor) processWorkflow(
@@ -386,54 +387,142 @@ func (w *WorkflowProcessor) runIsTriggerDependency(workflowRun *github.WorkflowR
 const commentSince = -3 * time.Hour
 const commentLookbackLimit = 100
 
-// processDependantWorkflows checks if the completed workflow run satisfies any trigger dependencies
-// and posts the corresponding command on the PR if all dependencies are met and the command was posted previously within the last commentSince.
+// requestedCommand is a pull request comment that is a command on its own and that Ariane
+// deferred, together with the submatch of the trigger regex it matched and the ID of the
+// pending marker it carries.
+type requestedCommand struct {
+	comment    *github.IssueComment
+	submatch   []string
+	reactionID int64
+}
+
+// findPendingCommands resolves the pull request's comments from the last commentSince to
+// the deferred command each of the given triggers is awaiting, keyed by trigger phrase.
+// Resolution goes through MatchTrigger, the same anchored match the issue_comment handler
+// applies, so a command is only ever acted on as the trigger it would have been dispatched
+// as when it was posted.
+func (w *WorkflowProcessor) findPendingCommands(ctx context.Context, prNumber int, triggers map[string]config.TriggerConfig, commenter *GithubCommenter) (map[string]requestedCommand, error) {
+	comments, err := getComments(ctx, w.client, w.owner, w.repo, prNumber, w.logger, time.Now().Add(commentSince), commentLookbackLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	commands := make(map[string]requestedCommand)
+	// A trigger is settled once its most recent pending command is found, or once a
+	// marker lookup for it failed: an older command could then be picked over a more
+	// recent one that is pending as well.
+	settled := make(map[string]bool)
+	// Comments are listed oldest first, so walk them from the most recent one.
+	for i := len(comments) - 1; i >= 0 && len(settled) < len(triggers); i-- {
+		comment := comments[i]
+		triggerPhrase, submatch, _, ok := w.arianeConfig.MatchTrigger(ctx, comment.GetBody())
+		if !ok || settled[triggerPhrase] {
+			continue
+		}
+		if _, wanted := triggers[triggerPhrase]; !wanted {
+			continue
+		}
+
+		reactionID, err := w.pendingTriggerMarker(ctx, commenter, comment)
+		if err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to look up the pending marker on comment %d", comment.GetID())
+			settled[triggerPhrase] = true
+			continue
+		}
+		if reactionID == 0 {
+			w.logger.Debug().Msgf("Comment %d carries no pending marker, not dispatching trigger '%s' for it", comment.GetID(), triggerPhrase)
+			continue
+		}
+
+		settled[triggerPhrase] = true
+		commands[triggerPhrase] = requestedCommand{comment: comment, submatch: submatch, reactionID: reactionID}
+	}
+	return commands, nil
+}
+
+// pendingTriggerMarker returns the ID of the pending marker Ariane left on the comment,
+// or 0 if the command is not awaiting its dependencies.
+func (w *WorkflowProcessor) pendingTriggerMarker(ctx context.Context, commenter *GithubCommenter, comment *github.IssueComment) (int64, error) {
+	// The comment listing carries a summary of the reactions on each comment. When it
+	// says there is no thumbs up at all, no marker can be there and the lookup that
+	// would say so is not worth a request. An absent summary proves nothing, so the
+	// lookup still decides.
+	if reactions := comment.GetReactions(); reactions != nil && reactions.GetPlusOne() == 0 {
+		return 0, nil
+	}
+
+	return commenter.findReaction(ctx, comment.GetID(), pendingTriggerReaction, w.appBotLogin)
+}
+
+// processDependantWorkflows dispatches the commands requested on the pull request within
+// the last commentSince whose trigger depends on the completed workflow run, once every
+// one of that trigger's dependencies is satisfied.
 func (w *WorkflowProcessor) processDependantWorkflows(ctx context.Context, pullRequest *github.PullRequest, prNumber int, workflowRun *github.WorkflowRun) error {
-triggers:
+	// Only a trigger that depends on the completed workflow run can have a command
+	// waiting on it, and listing the pull request's comments is only worth it if there
+	// is at least one such trigger.
+	dependentTriggers := make(map[string]config.TriggerConfig)
 	for triggerPhrase, trigger := range w.arianeConfig.Triggers {
-		// The completed workflow run only concerns this trigger if it is part of one
-		// of the trigger's dependencies.
 		isDependency, err := w.runIsTriggerDependency(workflowRun, trigger.DependsOn)
 		if err != nil {
 			return err
 		}
-		if !isDependency {
+		if isDependency {
+			dependentTriggers[triggerPhrase] = trigger
+		}
+	}
+	if len(dependentTriggers) == 0 {
+		return nil
+	}
+
+	// Looking up the pending markers is cheaper than checking the dependencies, so only
+	// the triggers with a pending command have their dependencies checked.
+	commenter := NewGithubCommenter(w.client, w.owner, w.repo, w.logger)
+	commenter.setReactionsEnabled(w.arianeConfig.GetReactions())
+	commands, err := w.findPendingCommands(ctx, prNumber, dependentTriggers, commenter)
+	if err != nil {
+		w.logger.Error().Err(err).Msgf("Failed to retrieve comments for PR #%d", prNumber)
+		return err
+	}
+
+nextTrigger:
+	for triggerPhrase, trigger := range dependentTriggers {
+		command, pending := commands[triggerPhrase]
+		if !pending {
 			continue
 		}
 
-		// The completed run is part of a dependency for this trigger: every one of the
-		// trigger's dependencies must be satisfied before the command is posted.
+		// Every one of the trigger's dependencies must be satisfied before the workflows
+		// are dispatched, not just the one the completed run belongs to.
 		for _, dependencyTriggerPhrase := range trigger.DependsOn {
 			dependencySatisfied, _, err := w.checkTriggerDependency(ctx, dependencyTriggerPhrase, pullRequest.GetHead().GetSHA())
 			if err != nil {
 				w.logger.Error().Err(err).Msgf("Failed to check dependency '%s' for trigger '%s'", dependencyTriggerPhrase, triggerPhrase)
-				continue triggers
+				continue nextTrigger
 			}
 			if !dependencySatisfied {
 				w.logger.Debug().Msgf("Dependency '%s' for trigger '%s' is not satisfied yet", dependencyTriggerPhrase, triggerPhrase)
-				continue triggers
+				continue nextTrigger
 			}
 		}
 
-		// All dependencies are met, post the command on the PR if it was posted previously
-		since := time.Now().Add(commentSince) // Check comments from the last 3 hours
+		w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, dispatching the workflows requested in comment %d on PR #%d", triggerPhrase, command.comment.GetID(), prNumber)
 
-		comments, err := getComments(ctx, w.client, w.owner, w.repo, prNumber, w.logger, since, commentLookbackLimit)
-		if err != nil {
-			w.logger.Error().Err(err).Msgf("Failed to retrieve comments for PR #%d", prNumber)
+		contextRef, headSHA, baseSHA := determineContextRef(pullRequest, w.owner, w.repo, w.logger)
+		if err := w.processWorkflowsForTrigger(ctx, command.submatch, prNumber, contextRef, headSHA, baseSHA, trigger.Workflows, trigger.DependsOn, commenter); err != nil {
+			// Leave the marker in place so that the command is retried when the next
+			// dependency run completes, rather than being silently dropped.
+			w.logger.Error().Err(err).Msgf("Failed to dispatch workflows for trigger '%s' on PR #%d", triggerPhrase, prNumber)
 			continue
 		}
-		foundTriggerComment := ""
-		for _, comment := range comments {
-			if w.arianeConfig.MatchTrigger(ctx, triggerPhrase, comment.GetBody()) != nil {
-				foundTriggerComment = comment.GetBody()
-			}
+
+		// The command has been acted on: consume the marker so it is not dispatched twice,
+		// and record on the comment that it went through.
+		if err := commenter.removeReaction(ctx, command.comment.GetID(), command.reactionID); err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to remove the pending marker from comment %d", command.comment.GetID())
 		}
-		if len(foundTriggerComment) > 0 {
-			w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, posting command on PR #%d", triggerPhrase, prNumber)
-			if err := commentOnPullRequest(ctx, w.client, w.owner, w.repo, prNumber, foundTriggerComment, w.logger); err != nil {
-				w.logger.Error().Err(err).Msgf("Failed to post command on PR #%d", prNumber)
-			}
+		if err := commenter.reactToComment(ctx, command.comment.GetID(), "rocket"); err != nil {
+			w.logger.Error().Err(err).Msgf("Failed to react to comment %d", command.comment.GetID())
 		}
 	}
 

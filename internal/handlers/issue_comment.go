@@ -170,9 +170,9 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 		if ok {
 			comment = skippedError.Error()
 			logger.Debug().Err(skippedError).Msg(comment)
-			commentErr := commenter.reactToComment(ctx, commentID, "+1")
+			commentErr := commenter.markPending(ctx, commentID)
 			if commentErr != nil {
-				logger.Error().Err(skippedError).Msg("Failed to react to comment with thumbs up emoji")
+				logger.Error().Err(commentErr).Msg("Failed to mark comment as pending")
 			}
 		} else {
 			comment = fmt.Sprintf("Failed to process workflows for trigger: %s", err.Error())
