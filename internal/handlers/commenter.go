@@ -51,7 +51,8 @@ func (c *GithubCommenter) commentOnPullRequest(ctx context.Context, prNumber int
 }
 
 func (c *GithubCommenter) reactToComment(ctx context.Context, commentID int64, emoji string) error {
-	if !c.reactionsEnabled {
+	// we need to react to the comment even if reactions are disabled, because the pending trigger reaction is used to mark a command as deferred and is consumed by the workflow_run handler.
+	if !c.reactionsEnabled && emoji != pendingTriggerReaction {
 		return nil
 	}
 	if emoji == "" {
