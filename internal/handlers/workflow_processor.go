@@ -17,11 +17,13 @@ import (
 	"github.com/cilium/ariane/internal/config"
 	"github.com/google/go-github/v92/github"
 	"github.com/rs/zerolog"
+	"github.com/shurcooL/githubv4"
 	"gopkg.in/yaml.v3"
 )
 
 type WorkflowProcessor struct {
 	client       *github.Client
+	clientv4     *githubv4.Client
 	arianeConfig *config.ArianeConfig
 	owner        string
 	repo         string
@@ -523,6 +525,9 @@ nextTrigger:
 		}
 		if err := commenter.reactToComment(ctx, command.comment.GetID(), "rocket"); err != nil {
 			w.logger.Error().Err(err).Msgf("Failed to react to comment %d", command.comment.GetID())
+		}
+		if err := minimizeComment(ctx, w.clientv4, command.comment); err != nil {
+			w.logger.Error().Err(err).Msgf("Failed minimize comment %d", command.comment.GetID())
 		}
 	}
 

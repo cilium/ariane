@@ -156,6 +156,7 @@ func (h *PRCommentHandler) Handle(ctx context.Context, eventType, deliveryID str
 
 	processor := WorkflowProcessor{
 		client:       client,
+		clientv4:     clientV4,
 		owner:        repositoryOwner,
 		repo:         repositoryName,
 		arianeConfig: arianeConfig,
