@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v92/github"
+	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -68,6 +69,7 @@ func TestWorkflowRunHandler_ConclusionCancelled(t *testing.T) {
 
 func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
 	client, err := github.NewClient(github.WithURLs(new("/"), new("/")))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +77,7 @@ func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -108,6 +111,7 @@ func TestWorkflowRunHandler_NoPullRequests(t *testing.T) {
 func TestWorkflowRunHandler_NoPullRequestsFromFork(t *testing.T) {
 	mockURL := new("/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -115,6 +119,7 @@ func TestWorkflowRunHandler_NoPullRequestsFromFork(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -185,6 +190,7 @@ func TestWorkflowRunHandler_UnauthorizedPRCreator(t *testing.T) {
 
 			mockURL := new(server.URL + "/")
 			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+			clientv4 := githubv4.NewClient(nil)
 			if err != nil {
 				t.Fatalf("Failed to create GitHub client: %v", err)
 			}
@@ -192,6 +198,7 @@ func TestWorkflowRunHandler_UnauthorizedPRCreator(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			mockClientCreator := NewMockClientCreator(mockCtrl)
 			mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+			mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
@@ -272,6 +279,7 @@ triggers:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -279,6 +287,7 @@ triggers:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -359,6 +368,7 @@ stages-config:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -366,6 +376,7 @@ stages-config:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -455,6 +466,7 @@ stages-config:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -462,6 +474,7 @@ stages-config:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	mux.HandleFunc("/repos/owner/repo/actions/workflows/test.yaml/runs", func(w http.ResponseWriter, r *http.Request) {
 		runs := &github.WorkflowRuns{
@@ -583,6 +596,7 @@ stages-config:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -590,6 +604,7 @@ stages-config:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -703,6 +718,7 @@ stages-config:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -710,6 +726,7 @@ stages-config:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -941,6 +958,7 @@ feedback:
 
 			mockURL := new(server.URL + "/")
 			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+			clientv4 := githubv4.NewClient(nil)
 			if err != nil {
 				t.Fatalf("Failed to create GitHub client: %v", err)
 			}
@@ -948,6 +966,7 @@ feedback:
 			mockCtrl := gomock.NewController(t)
 			mockClientCreator := NewMockClientCreator(mockCtrl)
 			mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+			mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
@@ -1134,6 +1153,7 @@ triggers:
 
 			mockURL := new(server.URL + "/")
 			client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+			clientv4 := githubv4.NewClient(nil)
 			if err != nil {
 				t.Fatalf("Failed to create GitHub client: %v", err)
 			}
@@ -1141,6 +1161,7 @@ triggers:
 			mockCtrl := gomock.NewController(t)
 			mockClientCreator := NewMockClientCreator(mockCtrl)
 			mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+			mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 			handler := &WorkflowRunHandler{
 				ClientCreator: mockClientCreator,
@@ -1232,6 +1253,7 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1239,6 +1261,7 @@ func TestWorkflowRunHandler_Failure_MaxRetriesReached(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1339,6 +1362,7 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1346,6 +1370,7 @@ func TestWorkflowRunHandler_Failure_NoFailedJobs(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1427,6 +1452,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1434,6 +1460,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1541,6 +1568,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1548,6 +1576,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1635,6 +1664,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1642,6 +1672,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1747,6 +1778,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1754,6 +1786,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1835,6 +1868,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1842,6 +1876,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -1925,6 +1960,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -1932,6 +1968,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,
@@ -2038,6 +2075,7 @@ rerun:
 
 	mockURL := new(server.URL + "/")
 	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	clientv4 := githubv4.NewClient(nil)
 	if err != nil {
 		t.Fatalf("Failed to create GitHub client: %v", err)
 	}
@@ -2045,6 +2083,7 @@ rerun:
 	mockCtrl := gomock.NewController(t)
 	mockClientCreator := NewMockClientCreator(mockCtrl)
 	mockClientCreator.EXPECT().NewInstallationClient(int64(1)).Return(client, nil)
+	mockClientCreator.EXPECT().NewInstallationV4Client(int64(1)).Return(clientv4, nil)
 
 	handler := &WorkflowRunHandler{
 		ClientCreator: mockClientCreator,

@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-github/v92/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/rs/zerolog"
+	"github.com/shurcooL/githubv4"
 	"go.uber.org/multierr"
 )
 
@@ -57,6 +58,10 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 	client, err := w.NewInstallationClient(installationID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create GitHub client")
+		return err
+	}
+	clientV4, err := w.NewInstallationV4Client(installationID)
+	if err != nil {
 		return err
 	}
 
@@ -165,7 +170,7 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 	// Handle based on conclusion
 	switch conclusion {
 	case "success":
-		return w.handleSuccessfulRun(ctx, client, &event, workflowRun, fullPR, repositoryOwner, repositoryName, arianeConfig, logger)
+		return w.handleSuccessfulRun(ctx, client, clientV4, &event, workflowRun, fullPR, repositoryOwner, repositoryName, arianeConfig, logger)
 	case "failure":
 		return w.handleFailedRun(ctx, client, &event, workflowRun, repositoryOwner, repositoryName, arianeConfig, logger)
 	default:
@@ -178,6 +183,7 @@ func (w *WorkflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 func (w *WorkflowRunHandler) handleSuccessfulRun(
 	ctx context.Context,
 	client *github.Client,
+	clientv4 *githubv4.Client,
 	event *github.WorkflowRunEvent,
 	workflowRun *github.WorkflowRun,
 	pullRequest *github.PullRequest,
@@ -189,6 +195,7 @@ func (w *WorkflowRunHandler) handleSuccessfulRun(
 
 	processor := WorkflowProcessor{
 		client:       client,
+		clientv4:     clientv4,
 		owner:        repositoryOwner,
 		repo:         repositoryName,
 		arianeConfig: arianeConfig,
