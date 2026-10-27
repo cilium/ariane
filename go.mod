@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/google/go-github/v92 v92.0.0
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
-	github.com/hmdsefi/gograph v0.9.0
+	github.com/hmdsefi/gograph v0.9.1
 	github.com/palantir/go-githubapp v0.48.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/rs/zerolog v1.35.1
