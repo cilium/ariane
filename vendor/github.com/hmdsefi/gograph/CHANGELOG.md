@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-01
+
+### Added
+
+- `Vertex.AllNeighbors` returns an iterator over the neighbors of a vertex.
+  For a vertex of a graph, it yields the graph's own vertices without copying
+  them. ([#107], [#287])
+- `traverse.BFS`, `BFSWithDepth`, `DFS`, `ClosestFirst` and `Topological`
+  return traversals as sequences for a `range` loop, in the order of the
+  matching iterators. `BFSWithDepth` gives each vertex with its number of
+  edges from the start, and `ClosestFirst` with its distance. ([#115], [#289])
+- `Vertices` and `Edges` range over all the vertices and edges of a graph. For
+  a graph from `New` they allocate nothing: ranging over the edges of a graph
+  with 10,000 vertices and 50,000 edges takes 0.44 ms, where `AllEdges` takes
+  0.93 ms and 2 MiB. ([#115], [#289])
+- `traverse.DFSEvents` and `DFSEventsAll` give the steps of a depth-first
+  search as a sequence: each vertex when the search discovers and finishes
+  it, and each edge as a tree, back, forward or cross edge, with its depth.
+  They keep their own stack, so a path of 100,000 vertices is safe to search,
+  and a `range` loop can stop at any event. ([#132], [#295])
+- `connectivity.FindCycle` returns the vertices of one cycle in order, such
+  as an import cycle to show in an error. It reports a cycle exactly when
+  `HasCycle` does, in O(V+E) time. ([#132], [#295])
+- The `gographtest` package helps test code that uses gograph.
+  `IsTopologicalOrder` accepts any valid topological order of a graph, and
+  `SameGroups` compares groups of vertices, such as components or cliques, in
+  any order. `Path`, `Cycle`, `Complete`, `Grid`, `Random` and `RandomDAG`
+  build graphs with the labels 0 to n-1. `Random` and `RandomDAG` take a
+  seeded `*rand.Rand` and run in O(n + m) expected time for m edges: a random
+  directed graph with 10,000 vertices takes 9 ms, where a draw for each pair
+  takes 362 ms. ([#126], [#296])
+- `Diff` returns the vertices, edges, weights and edge labels that changed
+  between two graphs, and whether they became weighted or acyclic. It matches
+  vertices by label, so the graphs can be built in any order.
+  `GraphDiff.String` prints one change per line, the diff encodes as JSON,
+  and `Apply` makes the same changes to a copy of a graph.
+  `WithWeightTolerance` treats close weights as equal. On a graph with 10,000
+  vertices and 50,000 edges, `Diff` takes 3.2 ms and allocates only the diff
+  it returns. ([#125], [#298])
+- `gographtest.Equal` fails a test unless two graphs have the same vertices,
+  edges, weights, edge labels and properties, and lists what differs, one
+  change per line. ([#126], [#298])
+
+### Changed
+
+- Each vertex of a graph from `New` keeps the edges that end at it.
+  `InDegree` reads that list in O(1), `EdgesOf` takes O(d log d) time for a
+  vertex with d edges, and `RemoveVertices` visits only the neighbors of each
+  removed vertex. On a graph with 2,000 vertices and 10,000 edges, calling
+  `EdgesOf` on every vertex takes 0.3 ms instead of 54 ms, and removing every
+  vertex takes 0.7 ms instead of 37 ms. ([#107], [#287])
+- On a graph created with `Acyclic`, `AddEdge` keeps a topological order of
+  the vertices to check each new edge. An edge that agrees with the order, an
+  edge from a vertex with no incoming edges, and an edge to a vertex with no
+  outgoing edges go in at once. Any other edge searches around its
+  endpoints, in at most O(R log R) time for the R vertices and edges reachable
+  from its destination. Building a chain of 4,000 edges takes 1.1 ms instead
+  of 618 ms, and a random DAG with 2,000 vertices and 10,000 edges 1.8 ms
+  instead of 2.2 s. ([#107], [#124], [#287], [#288])
+- The traversal iterators, `Dijkstra`, the strongly connected component
+  functions, the dag helpers and the encoders read the stored neighbors
+  through `AllNeighbors`. The breadth-first and depth-first iterators run
+  about 60% faster on a graph of 10,000 vertices and allocate 99% less
+  often. ([#107], [#287])
+- A vertex takes 16 more bytes, and each edge one more pointer in the list of
+  its destination. An acyclic graph also keeps one int per vertex for its
+  order. Removing an edge takes time proportional to the in-degree of its
+  destination as well as the out-degree of its source. ([#287], [#288])
+- `BellmanFord` keeps its distances in slices and stops after a pass that
+  changes none of them. `FloydWarshall` keeps its distances in one flat
+  matrix and skips each row with no path to the middle vertex. On a random
+  graph with 10,000 vertices and 50,000 edges, `BellmanFord` takes 2.7 ms
+  instead of 11.9 s, and `FloydWarshall` on 300 vertices takes 9 ms instead
+  of 1.66 s. ([#294])
+- `.agents/skills/gograph/SKILL.md` has a row for each function added in this
+  release, and the `connectivity.HasCycle` row points to `FindCycle`. Eight
+  rows link to the gograph.dev pages added since v0.9.0. ([#221], [#299])
+
+### Fixed
+
+- `BellmanFord` and `FloydWarshall` give `-Inf` for a path through a `-Inf`
+  weight on a graph with no cycle, as v0.9.0 did. A cycle through a `-Inf`
+  weight, and a negative cycle that a `-Inf` weight leads into, return
+  `ErrNegativeWeightCycle`. ([#291], [#294])
+- `FloydWarshall` returns `ErrNegativeWeightCycle` only for a negative cycle.
+  A check after the main loop added the weights in another order, and its
+  rounding reported a cycle on some graphs with none, such as the path
+  1 -> 3 -> 2 -> 0 with weights 3.3, 3.3 and 1.1. ([#294])
+
 ## [0.9.1] - 2026-10-26
 
 ### Added
@@ -372,7 +461,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core graph data structures.
 - Basic traversal iterators.
 
-[Unreleased]: https://github.com/hmdsefi/gograph/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/hmdsefi/gograph/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/hmdsefi/gograph/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/hmdsefi/gograph/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/hmdsefi/gograph/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/hmdsefi/gograph/compare/v0.8.1...v0.8.2
@@ -505,3 +595,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#285]: https://github.com/hmdsefi/gograph/pull/285
 [#286]: https://github.com/hmdsefi/gograph/pull/286
 [#292]: https://github.com/hmdsefi/gograph/pull/292
+[#107]: https://github.com/hmdsefi/gograph/issues/107
+[#287]: https://github.com/hmdsefi/gograph/pull/287
+[#124]: https://github.com/hmdsefi/gograph/issues/124
+[#288]: https://github.com/hmdsefi/gograph/pull/288
+[#115]: https://github.com/hmdsefi/gograph/issues/115
+[#289]: https://github.com/hmdsefi/gograph/pull/289
+[#294]: https://github.com/hmdsefi/gograph/pull/294
+[#221]: https://github.com/hmdsefi/gograph/issues/221
+[#299]: https://github.com/hmdsefi/gograph/pull/299
+[#132]: https://github.com/hmdsefi/gograph/issues/132
+[#295]: https://github.com/hmdsefi/gograph/pull/295
+[#126]: https://github.com/hmdsefi/gograph/issues/126
+[#296]: https://github.com/hmdsefi/gograph/pull/296
+[#125]: https://github.com/hmdsefi/gograph/issues/125
+[#298]: https://github.com/hmdsefi/gograph/pull/298
