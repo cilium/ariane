@@ -665,27 +665,6 @@ func setMockServer() *httptest.Server {
 			http.Error(w, "setMockServer: could not encode the comment payload in JSON for the HTTP response.", http.StatusInternalServerError)
 		}
 	})
-	mux.HandleFunc("/repos/owner/repo/actions/workflows/foo.yaml", func(w http.ResponseWriter, r *http.Request) {
-		// https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#get-a-workflow
-		workflow := &github.Workflow{
-			ID:   new(int64(1)),
-			Name: new("Foo Workflow"),
-			Path: new(".github/workflows/foo.yaml"),
-		}
-		if err := json.NewEncoder(w).Encode(workflow); err != nil {
-			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
-		}
-	})
-	mux.HandleFunc("/repos/owner/repo/actions/workflows/bar.yaml", func(w http.ResponseWriter, r *http.Request) {
-		workflow := &github.Workflow{
-			ID:   new(int64(2)),
-			Name: new("Bar Workflow"),
-			Path: new(".github/workflows/bar.yaml"),
-		}
-		if err := json.NewEncoder(w).Encode(workflow); err != nil {
-			http.Error(w, "setMockServer: could not encode the workflow payload in JSON for the HTTP response.", http.StatusInternalServerError)
-		}
-	})
 	mux.HandleFunc("POST /repos/owner/repo/check-runs", func(w http.ResponseWriter, r *http.Request) {
 		// https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28#create-a-check-run
 		var requestBody github.CreateCheckRunOptions
