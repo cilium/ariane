@@ -60,7 +60,7 @@ func (w *WorkflowProcessor) processWorkflow(
 	}
 
 	// Workflow should be skipped
-	if err := w.markWorkflowAsSkipped(ctx, workflow, sha); err != nil {
+	if err := w.markWorkflowAsSkipped(ctx, workflow, sha, workflowDispatchEvent.Ref); err != nil {
 		w.logger.Error().Err(err).Msgf("Failed to mark workflow %s as skipped", workflow)
 		return &workflowStatus{name: workflow, status: workflowStatusFailedToMarkSkipped}
 	}
@@ -151,15 +151,18 @@ func (w *WorkflowProcessor) rerunFailedJobs(ctx context.Context, workflow string
 	}()
 }
 
-func (w *WorkflowProcessor) markWorkflowAsSkipped(ctx context.Context, workflow, SHA string) error {
-	githubWorkflow, _, err := w.client.Actions.GetWorkflowByFileName(ctx, w.owner, w.repo, workflow)
+// markWorkflowAsSkipped creates a skipped check run on SHA. The check is named
+// after the workflow at ref, the ref the workflow is dispatched on, so that it
+// matches the name a real run would report.
+func (w *WorkflowProcessor) markWorkflowAsSkipped(ctx context.Context, workflow, SHA, ref string) error {
+	name, err := w.getWorkflowName(ctx, workflow, ref)
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to retrieve workflow")
+		w.logger.Error().Err(err).Msg("Failed to retrieve workflow name")
 		return err
 	}
 
 	checkRunOptions := github.CreateCheckRunOptions{
-		Name:       githubWorkflow.GetName(),
+		Name:       name,
 		HeadSHA:    SHA,
 		Status:     new("completed"),
 		Conclusion: new("skipped"),
@@ -225,7 +228,7 @@ func (w *WorkflowProcessor) processWorkflowsForTrigger(ctx context.Context, subm
 	if len(dependsOn) > 0 {
 		w.logger.Debug().Msgf("Trigger depends on: %q", dependsOn)
 		for _, dep := range dependsOn {
-			canProceed, inProgress, err := w.checkTriggerDependency(ctx, dep, headSHA)
+			canProceed, inProgress, err := w.checkTriggerDependency(ctx, dep, headSHA, contextRef)
 			if err != nil {
 				return fmt.Errorf("failed to check trigger dependency %q: %v", dep, err)
 			}
@@ -276,7 +279,7 @@ func (w *WorkflowProcessor) processWorkflowsForTrigger(ctx context.Context, subm
 }
 
 // checkTriggerDependency checks if all workflows from the dependency trigger have completed successfully or been skipped
-func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsOnTrigger, sha string) (canRun bool, inProgress bool, err error) {
+func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsOnTrigger, sha, ref string) (canRun bool, inProgress bool, err error) {
 	// Get the trigger configuration for the dependency
 	dependencyTrigger, exists := w.arianeConfig.Triggers[dependsOnTrigger]
 	if !exists {
@@ -301,7 +304,7 @@ func (w *WorkflowProcessor) checkTriggerDependency(ctx context.Context, dependsO
 			// No runs found for this workflow - dependency not satisfied
 			w.logger.Debug().Msgf("No runs found for dependency workflow %s", workflow)
 
-			check, err := w.getWorkflowCheck(ctx, workflow, sha)
+			check, err := w.getWorkflowCheck(ctx, workflow, sha, ref)
 			if err != nil {
 				return false, false, err
 			}
@@ -337,28 +340,40 @@ type namedWorkflow struct {
 	Name string `yaml:"name"`
 }
 
-func (w *WorkflowProcessor) getWorkflowCheck(ctx context.Context, workflow, sha string) (*github.CheckRun, error) {
-	content, _, _, err := w.client.Repositories.GetContents(ctx, w.owner, w.repo, ".github/workflows/"+workflow, &github.RepositoryContentGetOptions{Ref: sha})
+// getWorkflowName returns the workflow's name as defined at ref, which can
+// differ from the default branch name returned by the workflows API.
+func (w *WorkflowProcessor) getWorkflowName(ctx context.Context, workflow, ref string) (string, error) {
+	content, _, _, err := w.client.Repositories.GetContents(ctx, w.owner, w.repo, ".github/workflows/"+workflow, &github.RepositoryContentGetOptions{Ref: ref})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	fileContent, err := content.GetContent()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	nameSource := namedWorkflow{}
 	err = yaml.Unmarshal([]byte(fileContent), &nameSource)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if nameSource.Name == "" {
-		return nil, fmt.Errorf("workflow %s doesn't have a name", workflow)
+		return "", fmt.Errorf("workflow %s doesn't have a name", workflow)
+	}
+	return nameSource.Name, nil
+}
+
+// getWorkflowCheck returns the check run on sha for the workflow, looked up by
+// its name at ref like markWorkflowAsSkipped names it.
+func (w *WorkflowProcessor) getWorkflowCheck(ctx context.Context, workflow, sha, ref string) (*github.CheckRun, error) {
+	name, err := w.getWorkflowName(ctx, workflow, ref)
+	if err != nil {
+		return nil, err
 	}
 
-	checks, _, err := w.client.Checks.ListCheckRunsForRef(ctx, w.owner, w.repo, sha, &github.ListCheckRunsOptions{CheckName: &nameSource.Name})
+	checks, _, err := w.client.Checks.ListCheckRunsForRef(ctx, w.owner, w.repo, sha, &github.ListCheckRunsOptions{CheckName: &name})
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +381,7 @@ func (w *WorkflowProcessor) getWorkflowCheck(ctx context.Context, workflow, sha 
 	if len(checks.CheckRuns) > 0 {
 		return checks.CheckRuns[0], nil
 	}
-	return nil, fmt.Errorf("no %s checks found for workflow %s", nameSource.Name, workflow)
+	return nil, fmt.Errorf("no %s checks found for workflow %s", name, workflow)
 }
 
 // runIsTriggerDependency reports whether the completed workflow run is one of the
@@ -494,10 +509,12 @@ nextTrigger:
 			continue
 		}
 
+		contextRef, headSHA, baseSHA := determineContextRef(pullRequest, w.owner, w.repo, w.logger)
+
 		// Every one of the trigger's dependencies must be satisfied before the workflows
 		// are dispatched, not just the one the completed run belongs to.
 		for _, dependencyTriggerPhrase := range trigger.DependsOn {
-			dependencySatisfied, _, err := w.checkTriggerDependency(ctx, dependencyTriggerPhrase, pullRequest.GetHead().GetSHA())
+			dependencySatisfied, _, err := w.checkTriggerDependency(ctx, dependencyTriggerPhrase, headSHA, contextRef)
 			if err != nil {
 				w.logger.Error().Err(err).Msgf("Failed to check dependency '%s' for trigger '%s'", dependencyTriggerPhrase, triggerPhrase)
 				continue nextTrigger
@@ -510,7 +527,6 @@ nextTrigger:
 
 		w.logger.Info().Msgf("All dependencies for trigger '%s' are satisfied, dispatching the workflows requested in comment %d on PR #%d", triggerPhrase, command.comment.GetID(), prNumber)
 
-		contextRef, headSHA, baseSHA := determineContextRef(pullRequest, w.owner, w.repo, w.logger)
 		if err := w.processWorkflowsForTrigger(ctx, command.submatch, prNumber, contextRef, headSHA, baseSHA, trigger.Workflows, trigger.DependsOn, commenter); err != nil {
 			// Leave the marker in place so that the command is retried when the next
 			// dependency run completes, rather than being silently dropped.
