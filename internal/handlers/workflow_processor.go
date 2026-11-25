@@ -39,7 +39,7 @@ func (w *WorkflowProcessor) processWorkflow(
 	workflowDispatchEvent github.CreateWorkflowDispatchEventRequest,
 	sha string,
 ) *workflowStatus {
-	// Check if workflow already completed
+	// Check if a matching workflow run should prevent dispatching another run.
 	if w.shouldSkipWorkflow(ctx, workflow, sha) {
 		if w.arianeConfig.GetReportAllWorkflows() {
 			return &workflowStatus{name: workflow, status: workflowStatusAlreadyCompleted}
@@ -78,17 +78,21 @@ func (w *WorkflowProcessor) shouldSkipWorkflow(ctx context.Context, workflow, SH
 		return false
 	}
 
-	// Decide if any available workflow needs to be re-run (i.e. in case it failed)
+	// Skip active, successful, or skipped runs; retry failed jobs in place.
 	if runs != nil && len(runs.WorkflowRuns) > 0 {
 		lastRun := runs.WorkflowRuns[0]
-		w.logger.Debug().Msgf("shouldSkipWorkflow? %s/%s:%s, workflow: %s, status: %s, conclusion: %s", w.owner, w.repo, SHA, workflow, lastRun.GetStatus(), lastRun.GetConclusion())
-		if lastRun.GetStatus() == "completed" {
-			conc := lastRun.GetConclusion()
-			if conc == "success" || conc == "skipped" {
+		status := lastRun.GetStatus()
+		w.logger.Debug().Msgf("shouldSkipWorkflow? %s/%s:%s, workflow: %s, status: %s, conclusion: %s", w.owner, w.repo, SHA, workflow, status, lastRun.GetConclusion())
+		switch status {
+		case "in_progress", "pending", "queued", "requested", "waiting":
+			w.logger.Debug().Msgf("Skipping, workflow %s already has a run with status %s", workflow, status)
+			return true
+		case "completed":
+			switch conc := lastRun.GetConclusion(); conc {
+			case "success", "skipped":
 				w.logger.Debug().Msgf("Skipping, workflow %s run successfully with the conclusion %s, and there are no changes since the last run", workflow, conc)
 				return true
-			}
-			if conc == "failure" {
+			case "failure":
 				var wg sync.WaitGroup
 				w.rerunFailedJobs(ctx, workflow, lastRun.GetID(), &wg)
 				return true
@@ -97,7 +101,7 @@ func (w *WorkflowProcessor) shouldSkipWorkflow(ctx context.Context, workflow, SH
 	} else {
 		w.logger.Debug().Msgf("cannot skip workflow %s on %s/%s:%s. 'runs' value is nil? %v. Otherwise, no checks run for this workflow", workflow, w.owner, w.repo, SHA, runs == nil)
 	}
-	// Other conclusions will not be skipped
+	// Other statuses and conclusions will not be skipped
 	return false
 }
 
