@@ -209,3 +209,71 @@ func Test_markWorkflowAsSkipped(t *testing.T) {
 		t.Errorf("check run conclusion: %q, expected %q", check.GetConclusion(), "skipped")
 	}
 }
+
+func Test_shouldSkipWorkflow_statuses(t *testing.T) {
+	testCases := []struct {
+		status     string
+		shouldSkip bool
+	}{
+		{status: "in_progress", shouldSkip: true},
+		{status: "pending", shouldSkip: true},
+		{status: "queued", shouldSkip: true},
+		{status: "requested", shouldSkip: true},
+		{status: "waiting", shouldSkip: true},
+		{status: "cancelled", shouldSkip: false},
+	}
+	statusByWorkflow := make(map[string]string, len(testCases))
+	for _, testCase := range testCases {
+		statusByWorkflow[testCase.status+".yaml"] = testCase.status
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/owner/repo/actions/workflows/{workflow}/runs", func(w http.ResponseWriter, r *http.Request) {
+		status, ok := statusByWorkflow[r.PathValue("workflow")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("head_sha") != "mock-sha" {
+			http.Error(w, "unexpected head SHA", http.StatusBadRequest)
+			return
+		}
+
+		runs := github.WorkflowRuns{
+			TotalCount: new(1),
+			WorkflowRuns: []*github.WorkflowRun{{
+				Status:  new(status),
+				HeadSHA: new("mock-sha"),
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(runs); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	mockServer := httptest.NewServer(mux)
+	defer mockServer.Close()
+	mockURL := new(mockServer.URL + "/")
+	client, err := github.NewClient(github.WithURLs(mockURL, mockURL))
+	if err != nil {
+		t.Fatalf("Failed to create GitHub client: %v", err)
+	}
+
+	processor := &WorkflowProcessor{
+		client:       client,
+		arianeConfig: &config.ArianeConfig{},
+		owner:        "owner",
+		repo:         "repo",
+		logger:       zerolog.Nop(),
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.status, func(t *testing.T) {
+			workflow := testCase.status + ".yaml"
+			got := processor.shouldSkipWorkflow(context.Background(), workflow, "mock-sha")
+			if got != testCase.shouldSkip {
+				t.Errorf("shouldSkipWorkflow(%q) = %t, want %t", testCase.status, got, testCase.shouldSkip)
+			}
+		})
+	}
+}
